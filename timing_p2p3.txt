@@ -1,0 +1,34 @@
+Traceback (most recent call last):
+  File "/home/anastasi.kucheren@hevs.ch/tm_over_refusal_benchmark-master/run.py", line 8, in <module>
+    main()
+  File "/home/anastasi.kucheren@hevs.ch/tm_over_refusal_benchmark-master/over_refusal/evaluation.py", line 295, in main
+    results = runner.run(
+              ^^^^^^^^^^^
+  File "/home/anastasi.kucheren@hevs.ch/tm_over_refusal_benchmark-master/over_refusal/evaluation.py", line 121, in run
+    prompts = get_all_prompts(
+              ^^^^^^^^^^^^^^^^
+  File "/home/anastasi.kucheren@hevs.ch/tm_over_refusal_benchmark-master/over_refusal/prompts.py", line 119, in get_all_prompts
+    return load_prompts_from_csv(
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/anastasi.kucheren@hevs.ch/tm_over_refusal_benchmark-master/over_refusal/prompts.py", line 78, in load_prompts_from_csv
+    raise FileNotFoundError(f"Prompts file not found: {csv_path}")
+FileNotFoundError: Prompts file not found: data/orbench_violence200_p2_lawyer.csv
+Traceback (most recent call last):
+  File "/home/anastasi.kucheren@hevs.ch/tm_over_refusal_benchmark-master/run.py", line 8, in <module>
+    main()
+  File "/home/anastasi.kucheren@hevs.ch/tm_over_refusal_benchmark-master/over_refusal/evaluation.py", line 295, in main
+    results = runner.run(
+              ^^^^^^^^^^^
+  File "/home/anastasi.kucheren@hevs.ch/tm_over_refusal_benchmark-master/over_refusal/evaluation.py", line 121, in run
+    prompts = get_all_prompts(
+              ^^^^^^^^^^^^^^^^
+  File "/home/anastasi.kucheren@hevs.ch/tm_over_refusal_benchmark-master/over_refusal/prompts.py", line 119, in get_all_prompts
+    return load_prompts_from_csv(
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/anastasi.kucheren@hevs.ch/tm_over_refusal_benchmark-master/over_refusal/prompts.py", line 78, in load_prompts_from_csv
+    raise FileNotFoundError(f"Prompts file not found: {csv_path}")
+FileNotFoundError: Prompts file not found: data/orbench_violence200_p3_jailbreak.csv
+
+real	74m52.818s
+user	0m1.222s
+sys	0m0.123s
