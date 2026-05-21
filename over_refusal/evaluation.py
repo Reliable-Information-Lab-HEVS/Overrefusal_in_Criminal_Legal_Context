@@ -206,6 +206,7 @@ class EvaluationRunner:
                         "backend": backend,
                         "prompt": prompt_text[:PROMPT_PREVIEW_CHARS],
                         "response_preview": response_preview,
+                        "response_full": response_text,
                         "is_refused": refused,
                         "is_error": is_error,
                     })
