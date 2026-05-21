@@ -31,7 +31,7 @@ _try_load_dotenv()
 # Local Ollama server (no key needed)
 # -----------------------------------------------------------------------------
 OLLAMA_URL = "http://localhost:11434/api/generate"
-DEFAULT_OLLAMA_TIMEOUT = 1200
+DEFAULT_OLLAMA_TIMEOUT = 120
 DEFAULT_OLLAMA_MODELS = ["llama3.1:8b", "qwen2.5:7b", "gemma3:4b"]
 
 
