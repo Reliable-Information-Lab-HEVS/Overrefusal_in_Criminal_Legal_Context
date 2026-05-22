@@ -1,0 +1,48 @@
+Traceback (most recent call last):
+  File "/home/anastasi.kucheren@hevs.ch/tm_over_refusal_benchmark-master/run.py", line 8, in <module>
+    main()
+  File "/home/anastasi.kucheren@hevs.ch/tm_over_refusal_benchmark-master/over_refusal/evaluation.py", line 295, in main
+    results = runner.run(
+              ^^^^^^^^^^^
+  File "/home/anastasi.kucheren@hevs.ch/tm_over_refusal_benchmark-master/over_refusal/evaluation.py", line 183, in run
+    response_text = client.query(prompt_text, model_name)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/anastasi.kucheren@hevs.ch/tm_over_refusal_benchmark-master/over_refusal/clients/ollama.py", line 23, in query
+    response = requests.post(self.base_url, json=payload, timeout=self.timeout)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/anastasi.kucheren@hevs.ch/tm_over_refusal_benchmark-master/.venv/lib/python3.12/site-packages/requests/api.py", line 115, in post
+    return request("post", url, data=data, json=json, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/anastasi.kucheren@hevs.ch/tm_over_refusal_benchmark-master/.venv/lib/python3.12/site-packages/requests/api.py", line 59, in request
+    return session.request(method=method, url=url, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/anastasi.kucheren@hevs.ch/tm_over_refusal_benchmark-master/.venv/lib/python3.12/site-packages/requests/sessions.py", line 592, in request
+    resp = self.send(prep, **send_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/anastasi.kucheren@hevs.ch/tm_over_refusal_benchmark-master/.venv/lib/python3.12/site-packages/requests/sessions.py", line 706, in send
+    r = adapter.send(request, **kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/anastasi.kucheren@hevs.ch/tm_over_refusal_benchmark-master/.venv/lib/python3.12/site-packages/requests/adapters.py", line 645, in send
+    resp = conn.urlopen(
+           ^^^^^^^^^^^^^
+  File "/home/anastasi.kucheren@hevs.ch/tm_over_refusal_benchmark-master/.venv/lib/python3.12/site-packages/urllib3/connectionpool.py", line 787, in urlopen
+    response = self._make_request(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/home/anastasi.kucheren@hevs.ch/tm_over_refusal_benchmark-master/.venv/lib/python3.12/site-packages/urllib3/connectionpool.py", line 534, in _make_request
+    response = conn.getresponse()
+               ^^^^^^^^^^^^^^^^^^
+  File "/home/anastasi.kucheren@hevs.ch/tm_over_refusal_benchmark-master/.venv/lib/python3.12/site-packages/urllib3/connection.py", line 571, in getresponse
+    httplib_response = super().getresponse()
+                       ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/anastasi.kucheren@hevs.ch/miniconda3/lib/python3.12/http/client.py", line 1428, in getresponse
+    response.begin()
+  File "/home/anastasi.kucheren@hevs.ch/miniconda3/lib/python3.12/http/client.py", line 331, in begin
+    version, status, reason = self._read_status()
+                              ^^^^^^^^^^^^^^^^^^^
+  File "/home/anastasi.kucheren@hevs.ch/miniconda3/lib/python3.12/http/client.py", line 292, in _read_status
+    line = str(self.fp.readline(_MAXLINE + 1), "iso-8859-1")
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/anastasi.kucheren@hevs.ch/miniconda3/lib/python3.12/socket.py", line 720, in readinto
+    return self._sock.recv_into(b)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+KeyboardInterrupt
