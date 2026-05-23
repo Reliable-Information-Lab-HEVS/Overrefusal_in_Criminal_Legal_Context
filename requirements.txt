@@ -1,2 +1,4 @@
 requests>=2.31.0
 python-dotenv>=1.0.0
+# Only needed to re-extract prompts from OR-Bench (extract_orbench.py):
+# datasets>=2.0.0

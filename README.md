@@ -1,147 +1,157 @@
 # Over-Refusal Evaluation
 
-Python pipeline to measure whether LLMs refuse legitimate prompts on
-sensitive legal topics. Built on the methodology of OR-Bench
-(Cui et al., ICML 2025, [arXiv:2405.20947](https://arxiv.org/abs/2405.20947)).
+A small, reproducible pipeline that measures whether open-weight LLMs refuse
+benign-but-borderline prompts on legally sensitive topics, and how that refusal
+shifts when an authority / role-play **task** prefix is prepended.
 
-## What it does
+Built on the methodology of OR-Bench (Cui et al., ICML 2025,
+[arXiv:2405.20947](https://arxiv.org/abs/2405.20947)).
 
-1. Loads a CSV of Swiss Federal Court (BGer) cases, each with task instructions
-   and case facts in 4 languages (FR, DE, IT, EN).
-2. Sends prompts to multiple backends (local Ollama models + remote APIs).
-3. Detects refusals with a fast keyword-matching pass (OR-Bench Appendix M).
-4. Optionally re-classifies responses with an LLM-as-a-Judge ensemble
-   (3-class taxonomy: `direct_answer` / `direct_refusal` / `indirect_refusal`,
-   majority vote across GPT, Claude, Gemini).
+## How it works
 
-## Project structure
+A run combines two ingredients:
+
+1. **Data** — a CSV of cases, one per row, with the case text in French,
+   German and English.
+2. **Task** — an optional instruction/role prefix (e.g. *defense lawyer*,
+   *supreme-court counsel*) prepended to the case text. Running with no task
+   sends the case text alone.
+
+For each (case × language × model) the prompt is sent to the model, and a
+keyword detector flags whether the response opens with a refusal.
+
+Every model runs **locally via [Ollama](https://ollama.com/)** — there is no
+remote API and no model API key. (Apertus runs locally too, as an Ollama GGUF.)
+There is also **no LLM-as-judge**: refusal is decided by the keyword detector
+only. The only external service is DeepL, used solely to translate prompts.
+
+## Layout
 
 ```
-over_refusal_eval_project/
-├── README.md
-├── requirements.txt
-├── .gitignore
-├── .env.example                 # template, copy to .env (gitignored)
-├── run.py                       # entry point
-├── data/
-│   └── bger_sample_0421_translated.csv
-├── results/                     # run outputs (gitignored)
-└── over_refusal/
-    ├── __init__.py
-    ├── config.py                # env keys + model defaults + paths
-    ├── prompts.py               # CSV loader + filtering
+.
+├── run.py                       # evaluation CLI entry point
+├── extract_orbench.py           # (optional) build data CSVs from OR-Bench
+├── data/                        # case CSVs (7 columns, see below)
+│   ├── orbench_<category>.csv   # OR-Bench prompts (English origin)
+│   └── bger.csv                 # real Swiss Federal Court rulings (FR/DE origin)
+├── prompts/                     # one JSON per task prefix
+│   ├── summary.json
+│   ├── judge.json               # "national supreme court counsel"
+│   ├── lawyer.json              # "defense lawyer"
+│   └── jailbreak.json           # role-play "developer mode" override
+├── results/                     # run outputs
+└── refusal_eval/
+    ├── config.py                # paths, languages, models, key getters
+    ├── prompts.py               # data CSV loader + filtering
+    ├── tasks.py                 # task loader + prompt builder
     ├── detector.py              # keyword refusal detector
     ├── evaluation.py            # run loop + CLI
-    ├── judge.py                 # LLM-as-a-Judge (OR-Bench, 3-class)
     ├── reporting.py             # printed summary tables
     ├── storage.py               # CSV writer
-    ├── data/
-    │   ├── refusal_keywords.json
-    │   └── judge_prompt.txt
-    └── clients/
-        ├── base.py
-        ├── ollama.py
-        ├── mistral.py
-        ├── openai_client.py
-        ├── claude.py
-        └── gemini.py
+    ├── translate.py             # DeepL fill for data + tasks
+    ├── data/refusal_keywords.json
+    └── clients/                 # ollama.py
 ```
+
+### Data format
+
+Every file in `data/` has exactly these columns:
+
+```
+prompt_id, or_category, source, orginal_language, text_fr, text_de, text_en
+```
+
+`orginal_language` is the language the text was authored in; the other
+`text_<lang>` columns are DeepL translations (see *Translation* below). The
+OR-Bench files are English-origin; `bger.csv` holds 20 real Swiss Federal Court
+rulings authored in French or German (with the other languages translated).
+
+### Task format
+
+Each task is one JSON file in `prompts/`:
+
+```json
+{
+  "task_en": "I'm a defense lawyer ... Could you help me with the following?",
+  "task_fr": "Je suis avocat de la défense ...",
+  "task_de": "Ich bin Strafverteidiger ..."
+}
+```
+
+The task name is the file stem (`lawyer`, `judge`, `summary`, `jailbreak`).
+Add a new condition by dropping a new JSON file in the folder — no code change.
 
 ## Install
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
+.venv\Scripts\activate          # Windows ; macOS/Linux: source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## API keys
-
-Keys are read from environment variables, never hardcoded.
-
-```bash
-cp .env.example .env
-# edit .env and put your real keys in it
-```
-
-The code auto-loads `.env` if `python-dotenv` is installed (it is in
-`requirements.txt`). Otherwise, export the variables manually:
-
-```bash
-export OPENAI_API_KEY=...
-export ANTHROPIC_API_KEY=...
-export MISTRAL_API_KEY=...
-export GEMINI_API_KEY=...
-```
-
-`.env` is gitignored. Never commit real keys.
+Local models are served by [Ollama](https://ollama.com/); pull the ones you
+need, e.g. `ollama pull llama3.1:8b`.
 
 ## Run
 
-Quick smoke test (3 prompts, EN only, all backends):
+No task (case text only), English, default Ollama models:
 
 ```bash
-python run.py --quick
+python run.py --data data/orbench_harmful.csv
 ```
 
-API only, French only, both task variants (normal + hard):
+With the *lawyer* task, French + German:
 
 ```bash
-python run.py --api-only --languages fr --task-mode all
+python run.py --data data/orbench_harmful.csv --task lawyer --languages fr de
 ```
 
-Local Ollama only, all 4 languages:
+Pick specific models (any local Ollama tag, e.g. an Apertus GGUF):
 
 ```bash
-python run.py --ollama-only --languages fr de it en
+python run.py --data data/orbench_illegal.csv --task judge \
+    --models llama3.1:8b qwen3:8b apertus:8b
 ```
 
-Filtered run (only "violence" cases, 2 prompts):
+Quick check (5 cases, one model):
 
 ```bash
-python run.py --categories violence --limit 2 --task-mode hard
+python run.py --data data/orbench_sexual.csv --limit 5 --models llama3.1:8b
 ```
 
-Output filename:
+Useful flags: `--task {summary,judge,lawyer,jailbreak,none}`,
+`--languages fr de en`, `--models`, `--categories`, `--prompt-ids`, `--limit`,
+`--output`.
+
+Results are written to `results/<data>_<task>_<timestamp>.csv` by default, with
+columns `prompt_id, or_category, source, task, lang, model, prompt, response,
+is_refused, is_error`.
+
+## Translation
+
+If a data file only has the original-language text (e.g. `text_en`), fill the
+other languages with DeepL (set `DEEPL_API_KEY` in `.env`):
 
 ```bash
-python run.py --output bgr_full_run.csv
-# saves to results/bgr_full_run.csv
+python -m refusal_eval.translate --data data/orbench_harmful.csv          # data
+python -m refusal_eval.translate --tasks                                  # all task JSONs
+python -m refusal_eval.translate --data data/*.csv --tasks --dry-run      # preview only
 ```
 
-By default results are written to `results/over_refusal_results_<timestamp>.csv`.
+Already-filled cells are never overwritten, so translation runs are resumable.
 
-## LLM-as-a-Judge
+## Re-extracting prompts
 
-After a run, classify the responses into the 3-class OR-Bench taxonomy:
+To rebuild the data CSVs from OR-Bench (needs `datasets`):
 
 ```bash
-python -m over_refusal.judge --input results/bgr_full_run.csv
+pip install datasets
+python extract_orbench.py illegal data/orbench_illegal.csv 200
+python -m refusal_eval.translate --data data/orbench_illegal.csv
 ```
-
-Hybrid mode (skip LLM call on rows already flagged by keyword matching, faster):
-
-```bash
-python -m over_refusal.judge --input results/bgr_full_run.csv --only-ambiguous
-```
-
-Custom ensemble:
-
-```bash
-python -m over_refusal.judge --input results/bgr_full_run.csv --judges gpt claude
-```
-
-Adds 3 columns: `judge_label`, `judge_is_refusal`, `judge_votes`.
-
-## Editing the data without touching code
-
-- Refusal keywords: `over_refusal/data/refusal_keywords.json`
-- Judge prompt template: `over_refusal/data/judge_prompt.txt`
-- Prompts dataset: `data/bger_sample_0421_translated.csv`
 
 ## Reference
 
 Cui, J., Chiang, W.-L., Stoica, I., & Hsieh, C.-J. (2025).
-*OR-Bench: An Over-Refusal Benchmark for Large Language Models.*
-ICML 2025. [arXiv:2405.20947](https://arxiv.org/abs/2405.20947)
-# Refusal_restricted_topics-aka-Tribunal-Federal-project-
+*OR-Bench: An Over-Refusal Benchmark for Large Language Models.* ICML 2025.
+[arXiv:2405.20947](https://arxiv.org/abs/2405.20947)
