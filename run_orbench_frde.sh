@@ -16,7 +16,7 @@
 set -euo pipefail
 
 MODELS=(gemma4:e4b qwen3:8b "hf.co/bartowski/swiss-ai_Apertus-8B-Instruct-2509-GGUF:Q4_K_M")
-CATEGORIES=(harmful illegal sexual unethical violence)
+CATEGORIES=(unethical violence)
 
 for cat in "${CATEGORIES[@]}"; do
     echo "==================== ${cat} ===================="
