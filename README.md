@@ -10,6 +10,7 @@ We test whether adding an unverifiable claim of professional or institutional au
 Across four models in the 4–8B range (Llama 3.1, Gemma 4 E4B, Qwen 3, Apertus 8B), five OR-Bench categories (violence, sexual, harmful, illegal, unethical), and three languages (English, French, German), **authority prefixes consistently *increase* refusal**, often by a factor of 2–20×, the opposite of what one might naively expect. The effect varies by model and notably by language: it is much stronger in French than in German for some models. Effects on most model–prefix combinations reach $p < 0.01$ (one-sided Fisher's exact, pooled across topics).
 
 ## Repository structure
+````
 .
 ├── data/                      # Prompt CSVs used as input to run.py
 │   ├── orbench_<topic>200.csv               # 200 prompts per OR-Bench category
@@ -38,7 +39,7 @@ Across four models in the 4–8B range (Llama 3.1, Gemma 4 E4B, Qwen 3, Apertus 
 ├── run.py                     # CLI entry point
 ├── requirements.txt
 └── README.md
-
+````
 
 
 ## Setup
