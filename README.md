@@ -74,7 +74,7 @@ For each of the five OR-Bench categories (`violence`, `sexual`, `harmful`, `unet
 
 ```bash
 for topic in violence sexual harmful unethical illegal; do
-  for variant in "" _p2_lawyer _prefix _p3_jailbreak; do
+  for variant in "" _lawyer _supreme-court _jailbreak; do
     python run.py \
       --prompts-file data/orbench_${topic}200${variant}.csv \
       --ollama-only \
