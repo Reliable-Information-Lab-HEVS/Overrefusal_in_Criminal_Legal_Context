@@ -13,11 +13,10 @@ Across four models in the 4–8B range (Llama 3.1, Gemma 4 E4B, Qwen 3, Apertus 
 ````
 .
 ├── data/                      # Prompt CSVs used as input to run.py
-│   ├── orbench_<topic>200.csv               # 200 prompts per OR-Bench category
-│   ├── orbench_<topic>200_p2_lawyer.csv     # lawyer-prefixed variant
-│   ├── orbench_<topic>200_prefix.csv        # supreme-court-prefixed variant
-│   ├── orbench_<topic>200_p3_jailbreak.csv  # jailbreak-prefixed variant
-│   ├── bger_sample.csv                      # 20 real-world cases from swiss BGER database 
+│   ├── orbench_<topic>200.csv                   # 200 prompts per OR-Bench category
+│   ├── orbench_<topic>200_lawyer.csv            # lawyer-prefixed variant
+│   ├── orbench_<topic>200_supreme-court.csv     # supreme-court-prefixed variant
+│   ├── orbench_<topic>200_jailbreak.csv         # jailbreak-prefixed variant
 │   └── US_sample.csv                        # 10 real-world cases from US Epstein-files database
 ├── over_refusal/              # Core pipeline (Ollama client, detector, runner)
 │   ├── clients/ollama.py      # Local LLM client (temperature = 0)
