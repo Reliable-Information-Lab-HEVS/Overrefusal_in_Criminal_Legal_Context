@@ -42,6 +42,14 @@ The prefix condition is injected **at run time** with `--prefix`
 `over_refusal/prefixes.py`. The same base prompt file is reused for every
 condition — no need to pre-build prefixed CSVs.
 
+### Quick test
+
+Sanity-check the whole pipeline in a few seconds (3 prompts, English only):
+
+```bash
+python run.py --prompts-file data/orbench_violence200.csv --quick
+```
+
 ### Run the evaluation
 
 ```bash
@@ -117,6 +125,23 @@ OR-Bench prompts are the first 200 per category from the OR-Bench-80K release.
 To run on your own confidential documents, fill `data/template_input.csv` and
 pass it with `--prompts-file` (see `data/INPUT_FORMAT.md`). The text stays on
 your machine; only aggregated refusal counts are produced.
+
+### Regenerate the prompt set from scratch
+
+The `data/orbench_*200.csv` files are provided, but can be rebuilt:
+
+```bash
+# 1. download 200 prompts per category from OR-Bench-80K (English)
+for topic in violence sexual harmful unethical illegal; do
+  python helpers/extract_orbench.py ${topic} data/orbench_${topic}200.csv 200
+done
+
+# 2. add French / German / Italian columns via DeepL
+python helpers/translate_prompts.py --key <DEEPL_KEY>
+```
+
+The real-document sets (`bger_sample.csv`, `US_sample.csv`) are provided as-is;
+their source-acquisition step is not part of this release.
 
 ## Repository layout
 
