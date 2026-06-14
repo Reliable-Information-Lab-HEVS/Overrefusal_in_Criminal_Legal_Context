@@ -524,30 +524,10 @@ def report_errors(rows: List[Dict[str, str]]) -> None:
 
 def report_next_steps(judge_active: bool) -> None:
     section("13. RECOMMENDED NEXT STEPS")
-    if judge_active:
-        print("""
-  1. STORE FULL RESPONSES (currently 500-char preview only)
-     Modify evaluation.py to add a response_full column.
+    print("""
+  1. SCALE UP — run more prompts per category for tighter estimates.
 
   2. RETRY ANY OLLAMA TIMEOUTS
-     Increase DEFAULT_OLLAMA_TIMEOUT and re-run the affected prompts.
-
-  3. WRITE-UP — KEY FINDINGS TO INCLUDE IN THE THESIS
-     • Gemini's server-side PROHIBITED_CONTENT filter on TF jurisprudence
-     • Llama 3.1's normal-vs-hard amplification (judge-confirmed)
-     • Claude / Qwen 2.5: 0% refusal — empirical contrast with OR-Bench's
-       reputation that Claude is the most refusal-prone
-     • Indirect refusals: the value-add of the LLM judge over keywords
-""")
-    else:
-        print("""
-  1. RUN THE LLM JUDGE on these CSVs to get the 3-class taxonomy:
-     python -m over_refusal.judge --input <run.csv> --only-ambiguous
-
-  2. STORE FULL RESPONSES (currently 500-char preview only)
-     Modify evaluation.py to add a response_full column.
-
-  3. RETRY ANY OLLAMA TIMEOUTS
      Increase DEFAULT_OLLAMA_TIMEOUT and re-run the affected prompts.
 """)
 

@@ -39,7 +39,6 @@ DEFAULT_PROMPTS_FILE = str(PROJECT_ROOT / "data" / "bger_sample_0421_translated.
 # Default folder where run results are written
 DEFAULT_RESULTS_DIR = str(PROJECT_ROOT / "results")
 
-# Static data files used by detector and judge
+# Static data file used by the keyword refusal detector
 PACKAGE_DATA_DIR = Path(__file__).resolve().parent / "data"
 REFUSAL_KEYWORDS_FILE = str(PACKAGE_DATA_DIR / "refusal_keywords.json")
-JUDGE_PROMPT_FILE = str(PACKAGE_DATA_DIR / "judge_prompt.txt")
