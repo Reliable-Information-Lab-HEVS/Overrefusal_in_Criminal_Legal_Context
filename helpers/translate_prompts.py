@@ -45,8 +45,8 @@ DEEPL_SOURCE = {"fr": "FR", "de": "DE", "it": "IT", "en": "EN"}
 BATCH_SIZE = 40
 
 
-# Placeholders from .env.example that must never be treated as real keys.
-_PLACEHOLDER_KEYS = {"key1", "key2", "key1:fx", "your-deepl-key-here"}
+# Placeholders from .env.example that must never be treated as a real key.
+_PLACEHOLDER_KEYS = {"your-deepl-key-here"}
 
 
 def sanitize_key(key: str) -> str:
@@ -64,41 +64,24 @@ def endpoint_for_key(key: str) -> str:
 
 
 class DeepLClient:
-    """Thin DeepL wrapper with batch translation and key rotation."""
+    """Thin DeepL wrapper with batch translation (single API key)."""
 
-    def __init__(self, keys: list[str]):
-        cleaned = [sanitize_key(k) for k in keys]
-        self.keys = [
-            k for k in cleaned if k and k.lower() not in _PLACEHOLDER_KEYS
-        ]
-        if not self.keys:
+    def __init__(self, key: str):
+        self.key = sanitize_key(key)
+        if not self.key or self.key.lower() in _PLACEHOLDER_KEYS:
             raise ValueError(
-                "No usable DeepL API key. Set DEEPL_API_KEY in .env or pass --keys."
+                "No usable DeepL API key. Set DEEPL_API_KEY in .env or pass --key."
             )
-        self.idx = 0
         self.session = requests.Session()
 
-    @property
-    def _key(self) -> str:
-        return self.keys[self.idx]
-
-    def _rotate(self) -> bool:
-        """Move to the next key. Returns False if none are left."""
-        if self.idx + 1 < len(self.keys):
-            self.idx += 1
-            print(f"  [key] quota reached, switching to key #{self.idx + 1}")
-            return True
-        return False
-
     def translate(self, texts: list[str], source: str, target: str) -> list[str]:
-        """Translate a batch of texts. Retries on transient errors / rotates on quota."""
+        """Translate a batch of texts. Retries a few times on transient errors."""
         attempt = 0
         while True:
             attempt += 1
-            key = self._key
             resp = self.session.post(
-                endpoint_for_key(key),
-                headers={"Authorization": f"DeepL-Auth-Key {key}"},
+                endpoint_for_key(self.key),
+                headers={"Authorization": f"DeepL-Auth-Key {self.key}"},
                 data=[
                     ("source_lang", DEEPL_SOURCE[source]),
                     ("target_lang", DEEPL_TARGET[target]),
@@ -110,11 +93,9 @@ class DeepLClient:
             if resp.status_code == 200:
                 return [t["text"] for t in resp.json()["translations"]]
 
-            # 456 = quota exceeded for this key.
+            # 456 = quota exceeded for the key.
             if resp.status_code == 456:
-                if self._rotate():
-                    continue
-                raise RuntimeError("All DeepL keys have exhausted their quota (456).")
+                raise RuntimeError("DeepL key has exhausted its quota (456).")
 
             # 429 / 5xx = transient, back off and retry (a few times).
             if resp.status_code in (429, 500, 502, 503, 529) and attempt <= 5:
@@ -224,9 +205,9 @@ def main() -> int:
         help="Target languages (default: fr de it).",
     )
     parser.add_argument(
-        "--keys",
+        "--key",
         default="",
-        help="Comma-separated DeepL keys (overrides DEEPL_API_KEY).",
+        help="DeepL API key (overrides DEEPL_API_KEY).",
     )
     parser.add_argument(
         "--dry-run",
@@ -235,17 +216,16 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    raw_keys = args.keys or os.environ.get("DEEPL_API_KEY", "")
-    keys = raw_keys.split(",")
+    key = args.key or os.environ.get("DEEPL_API_KEY", "")
 
     client: DeepLClient | None = None
     if not args.dry_run:
         try:
-            client = DeepLClient(keys)
+            client = DeepLClient(key)
         except ValueError as exc:
             print(f"Error: {exc}", file=sys.stderr)
             return 1
-        print(f"Using {len(client.keys)} DeepL key(s).")
+        print("Using 1 DeepL key.")
 
     for path in args.files:
         translate_file(Path(path), client, args.langs, args.dry_run)
