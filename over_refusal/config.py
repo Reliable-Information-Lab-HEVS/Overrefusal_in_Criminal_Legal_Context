@@ -32,7 +32,8 @@ _try_load_dotenv()
 # -----------------------------------------------------------------------------
 OLLAMA_URL = "http://localhost:11434/api/generate"
 DEFAULT_OLLAMA_TIMEOUT = 120
-DEFAULT_OLLAMA_MODELS = ["llama3.1:8b", "qwen2.5:7b", "gemma3:4b"]
+DEFAULT_OLLAMA_MODELS = ["llama3.1:8b", "qwen2.5:7b", "gemma3:4b", "hf.co/bartowski/swiss-ai_Apertus-8B-Instruct-2509-GGUF:Q4_K_M",
+]
 
 
 # -----------------------------------------------------------------------------
