@@ -47,12 +47,16 @@ class GeminiClient(BaseClient):
     name = "gemini"
 
     def __init__(self, api_key: Optional[str] = None, timeout: int = 60):
+        # Do NOT raise here if the key is missing: EvaluationRunner instantiates
+        # every client up front, so raising would crash runs that never touch
+        # Gemini (e.g. --ollama-only). Defer the check to query(), like the
+        # other API clients (Claude/OpenAI/Mistral/Apertus).
         self.api_key = api_key or os.environ.get("GEMINI_API_KEY")
         self.timeout = timeout
-        if not self.api_key:
-            raise RuntimeError("GEMINI_API_KEY not set")
 
     def query(self, prompt: str, model: str) -> str:
+        if not self.api_key:
+            return "[ERROR] GEMINI_API_KEY not set"
         url = f"{GEMINI_API_BASE}/{model}:generateContent?key={self.api_key}"
         payload = {
             "contents": [{"parts": [{"text": prompt}]}],
