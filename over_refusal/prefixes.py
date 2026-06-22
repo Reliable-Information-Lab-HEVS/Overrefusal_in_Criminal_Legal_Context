@@ -10,12 +10,17 @@ This module makes the prefix a *run-time* choice instead. A single base CSV is
 loaded, and ``--prefix {none,lawyer,supreme-court,jailbreak}`` prepends the right
 text in the right language. The wordings below are the ones used in the paper:
 
-  - ``supreme-court`` is the anonymized version ("national supreme court"),
-    matching the paper and the ``task_hard_*`` columns of the OR-Bench CSVs, in
-    all four languages.
+  - ``supreme-court`` is the anonymized version ("national supreme court"). The
+    English wording reproduces the paper; the FR/DE/IT wordings are equivalent
+    and harmonized in register, but NOT character-identical to the older
+    ``task_hard_*`` columns of the BGer/OR-Bench CSVs (e.g. FR/IT use the formal
+    Lei/vous register, and prefix and prompt are joined with "\n\n" here vs a
+    single space in the old columns). Treat them as the same *condition*, not the
+    same string.
   - ``lawyer`` and ``jailbreak`` English wordings reproduce the original
-    experiment; the FR/DE/IT translations keep the same register so the
-    condition can be run in any supported language.
+    experiment; the FR/DE/IT translations are kept in the same (formal) register
+    so the condition is comparable across languages. Translations are
+    DeepL-assisted and pending native-speaker review (DE and IT in particular).
 
 To add a prefix condition, add one entry here (with a wording per language) and
 it becomes available everywhere via ``--prefix``; no new CSV files are needed.
@@ -79,9 +84,10 @@ PREFIX_CHOICES = [NONE] + list(PREFIXES.keys())
 def apply_prefix(prompt_text: str, condition: str, lang: str) -> str:
     """Prepend the prefix for ``condition`` in ``lang`` to ``prompt_text``.
 
-    ``condition == "none"`` (or empty) returns the prompt unchanged. If a prefix
-    has no wording for ``lang``, we fall back to the English wording so the run
-    does not silently drop the condition.
+    ``condition == "none"`` (or empty) returns the prompt unchanged. Raises
+    ValueError if ``condition`` is unknown, or if it has no wording for ``lang``:
+    we fail loudly rather than silently injecting another language's prefix,
+    since language is an independent variable of the benchmark.
     """
     if not condition or condition == NONE:
         return prompt_text
@@ -92,5 +98,10 @@ def apply_prefix(prompt_text: str, condition: str, lang: str) -> str:
         )
 
     lang_map = PREFIXES[condition]
-    prefix = lang_map.get(lang) or lang_map["en"]
+    if lang not in lang_map:
+        raise ValueError(
+            f"No '{condition}' prefix for language '{lang}'. "
+            f"Available: {sorted(lang_map)}"
+        )
+    prefix = lang_map[lang]
     return f"{prefix}\n\n{prompt_text}"
