@@ -38,13 +38,8 @@ import time
 from pathlib import Path
 from typing import Dict, Optional
 
-from over_refusal.clients import ClaudeClient, GeminiClient, OpenAIClient
-from over_refusal.config import (
-    CLAUDE_DEFAULT_MODEL,
-    GEMINI_DEFAULT_MODEL,
-    OPENAI_DEFAULT_MODEL,
-    PROJECT_ROOT,
-)
+from over_refusal.clients import load_judge_names, resolve_judges
+from over_refusal.config import PROJECT_ROOT
 
 
 # Path to the methodology prompt template. The script just substitutes the
@@ -56,13 +51,8 @@ PROMPT_TEMPLATE_FILE = (
 # Keys we expect in the LLM's JSON output, in this exact order.
 EXPECTED_KEYS = ["task_hard_fr", "task_hard_de", "task_hard_it", "task_hard_en"]
 
-# Available backends; "gpt" is the default for reasons explained in the README.
-BACKENDS = {
-    "gpt": (OpenAIClient, OPENAI_DEFAULT_MODEL),
-    "claude": (ClaudeClient, CLAUDE_DEFAULT_MODEL),
-    "gemini": (GeminiClient, GEMINI_DEFAULT_MODEL),
-}
-
+# The generator models are the same ones declared as `judges:` in models.yaml
+# (gpt / claude / gemini). "gpt" is the default for reasons explained in the README.
 # Be polite to the API between calls
 SLEEP_BETWEEN_CALLS = 0.5
 
@@ -176,9 +166,10 @@ def main() -> None:
     )
     parser.add_argument(
         "--model",
-        choices=list(BACKENDS),
+        choices=load_judge_names(),
         default="gpt",
-        help="Which backend to use (default: gpt)",
+        help="Which generator model to use (default: gpt). Choices come from "
+             "the `judges:` section of models.yaml.",
     )
     parser.add_argument(
         "--limit",
@@ -230,10 +221,10 @@ def main() -> None:
         print(render_prompt(template, target))
         return
 
-    # 4. Build the LLM client
-    client_cls, default_model = BACKENDS[args.model]
-    client = client_cls()
-    model_name = default_model
+    # 4. Build the LLM client (from the models.yaml judges section)
+    spec = resolve_judges([args.model])[0]
+    client = spec.client
+    model_name = spec.model
     print(f"Using {args.model} ({model_name}) as generator.")
 
     # 5. Process rows one by one

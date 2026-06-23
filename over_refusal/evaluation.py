@@ -15,26 +15,13 @@ import argparse
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
-from over_refusal.clients import (
-    ApertusClient,
-    ClaudeClient,
-    GeminiClient,
-    MistralClient,
-    OllamaClient,
-    OpenAIClient,
-)
+from over_refusal.clients import ModelSpec, resolve_models
 from over_refusal.config import (
-    APERTUS_DEFAULT_MODEL,
-    CLAUDE_DEFAULT_MODEL,
     DEFAULT_LANGUAGES,
-    DEFAULT_OLLAMA_MODELS,
     DEFAULT_PROMPTS_FILE,
     DEFAULT_RESULTS_DIR,
-    GEMINI_DEFAULT_MODEL,
-    MISTRAL_DEFAULT_MODEL,
-    OPENAI_DEFAULT_MODEL,
     SUPPORTED_LANGUAGES,
 )
 from over_refusal.detector import RefusalDetector
@@ -58,41 +45,25 @@ class EvaluationRunner:
 
     def __init__(self):
         self.detector = RefusalDetector()
-        # Backend name -> client instance
-        self.clients = {
-            "ollama": OllamaClient(),
-            "mistral_api": MistralClient(),
-            "openai_api": OpenAIClient(),
-            "claude_api": ClaudeClient(),
-            "gemini_api": GeminiClient(),
-            "apertus_api": ApertusClient(),
-        }
 
     def build_models(
         self,
         ollama_only: bool = False,
         api_only: bool = False,
         ollama_models: List[str] = None,
-    ) -> List[Tuple[str, str]]:
-        """Return the list of (backend, model_name) pairs to test."""
-        if ollama_models is None:
-            ollama_models = DEFAULT_OLLAMA_MODELS
+        models_file: Optional[str] = None,
+    ) -> List[ModelSpec]:
+        """Return the list of models to test, resolved from models.yaml.
 
-        models: List[Tuple[str, str]] = []
-
-        # Local Ollama models first (free, fast on the cluster)
-        if not api_only:
-            for model_name in ollama_models:
-                models.append(("ollama", model_name))
-
-        # Remote APIs after
-        if not ollama_only:
-            #models.append(("mistral_api", MISTRAL_DEFAULT_MODEL))
-            #models.append(("openai_api", OPENAI_DEFAULT_MODEL))
-            #models.append(("claude_api", CLAUDE_DEFAULT_MODEL))
-            #models.append(("gemini_api", GEMINI_DEFAULT_MODEL))
-            models.append(("apertus_api", APERTUS_DEFAULT_MODEL))
-        return models
+        The set of models and their backend wiring live in models.yaml; the
+        flags below only filter that list (see registry.resolve_models).
+        """
+        return resolve_models(
+            models_file=models_file,
+            ollama_only=ollama_only,
+            api_only=api_only,
+            ollama_models=ollama_models,
+        )
 
     def run(
         self,
@@ -106,6 +77,7 @@ class EvaluationRunner:
         limit: Optional[int] = None,
         task_mode: str = "normal",
         prefix: str = "none",
+        models_file: Optional[str] = None,
     ) -> List[Dict]:
         """Run the evaluation and return the list of result dicts."""
 
@@ -137,7 +109,13 @@ class EvaluationRunner:
             ollama_only=ollama_only,
             api_only=api_only,
             ollama_models=ollama_models,
+            models_file=models_file,
         )
+        if not models:
+            raise ValueError(
+                "No models selected. Check models.yaml and the "
+                "--ollama-only / --api-only / --ollama-models flags."
+            )
 
         results: List[Dict] = []
         total = len(prompts) * len(languages) * len(models)
@@ -176,17 +154,15 @@ class EvaluationRunner:
                 # Inject the authority/jailbreak prefix at run time (if any).
                 prompt_text = apply_prefix(prompt_text, prefix, language)
 
-                for backend, model_name in models:
+                for spec in models:
+                    backend = spec.backend
+                    model_name = spec.name
                     count += 1
                     label = f"{prompt_id} | {language} | {task_variant} | {model_name}"
                     print(f"[{count}/{total}] {label}...", end=" ", flush=True)
 
                     # Send the prompt to the model
-                    client = self.clients.get(backend)
-                    if client is None:
-                        response_text = "[ERROR] Unknown backend"
-                    else:
-                        response_text = client.query(prompt_text, model_name)
+                    response_text = spec.client.query(prompt_text, model_name)
 
                     # Be gentle with paid APIs
                     if backend != "ollama":
@@ -255,8 +231,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
                         help="Only test API models (no Ollama)")
     parser.add_argument("--ollama-only", action="store_true",
                         help="Only test Ollama models (no API calls)")
-    parser.add_argument("--ollama-models", nargs="+", default=DEFAULT_OLLAMA_MODELS,
-                        help="List of Ollama models to test")
+    parser.add_argument("--ollama-models", nargs="+", default=None,
+                        help="Override the Ollama models from models.yaml with this list")
+    parser.add_argument("--models-file", type=str, default=None,
+                        help="Path to the models config YAML (default: models.yaml at project root)")
 
     # --- Language selection ---
     parser.add_argument("--languages", nargs="+", default=DEFAULT_LANGUAGES,
@@ -316,6 +294,7 @@ def main() -> None:
         limit=limit,
         task_mode=args.task_mode,
         prefix=args.prefix,
+        models_file=args.models_file,
     )
 
     output_path = _resolve_output_path(args.output)

@@ -30,13 +30,8 @@ import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from over_refusal.clients import ClaudeClient, GeminiClient, OpenAIClient
-from over_refusal.config import (
-    CLAUDE_DEFAULT_MODEL,
-    GEMINI_DEFAULT_MODEL,
-    JUDGE_PROMPT_FILE,
-    OPENAI_DEFAULT_MODEL,
-)
+from over_refusal.clients import load_judge_names, resolve_judges
+from over_refusal.config import JUDGE_PROMPT_FILE
 
 
 # -----------------------------------------------------------------------------
@@ -156,23 +151,14 @@ class EnsembleJudge:
 
 
 # -----------------------------------------------------------------------------
-# Available judges (configurable from CLI)
+# Available judges (declared in models.yaml under `judges:`)
 # -----------------------------------------------------------------------------
-AVAILABLE_JUDGES = {
-    "gpt": lambda: JudgeCall("gpt", OpenAIClient(), OPENAI_DEFAULT_MODEL),
-    "claude": lambda: JudgeCall("claude", ClaudeClient(), CLAUDE_DEFAULT_MODEL),
-    "gemini": lambda: JudgeCall("gemini", GeminiClient(), GEMINI_DEFAULT_MODEL),
-}
-
-
 def build_ensemble(judge_names: List[str]) -> EnsembleJudge:
-    judges = []
-    for name in judge_names:
-        if name not in AVAILABLE_JUDGES:
-            raise ValueError(
-                f"Unknown judge '{name}'. Available: {list(AVAILABLE_JUDGES)}"
-            )
-        judges.append(AVAILABLE_JUDGES[name]())
+    """Build the ensemble from the `judges:` section of models.yaml."""
+    judges = [
+        JudgeCall(spec.name, spec.client, spec.model)
+        for spec in resolve_judges(judge_names)
+    ]
     return EnsembleJudge(judges)
 
 
@@ -196,7 +182,7 @@ def judge_results_csv(
       - judge_votes        per-judge labels separated by '|'
     """
     if judge_names is None:
-        judge_names = ["gpt", "claude", "gemini"]
+        judge_names = load_judge_names()
 
     ensemble = build_ensemble(judge_names)
 
@@ -284,13 +270,15 @@ def _print_judge_summary(rows: List[Dict]) -> None:
 # CLI
 # -----------------------------------------------------------------------------
 def build_arg_parser() -> argparse.ArgumentParser:
+    # Judge ids come from the `judges:` section of models.yaml.
+    available_judges = load_judge_names()
     p = argparse.ArgumentParser(description="OR-Bench LLM-as-a-Judge (3-class)")
     p.add_argument("--input", required=True,
                    help="Path to a results CSV produced by evaluation.py")
     p.add_argument("--output", default=None,
                    help="Output CSV path (default: <input>_judged.csv)")
-    p.add_argument("--judges", nargs="+", default=["gpt", "claude", "gemini"],
-                   choices=list(AVAILABLE_JUDGES),
+    p.add_argument("--judges", nargs="+", default=available_judges,
+                   choices=available_judges,
                    help="Ensemble members for the majority vote")
     p.add_argument("--only-ambiguous", action="store_true",
                    help="Skip LLM-judge when keyword matching already flagged refusal "

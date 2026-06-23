@@ -32,12 +32,18 @@ _try_load_dotenv()
 # -----------------------------------------------------------------------------
 OLLAMA_URL = "http://localhost:11434/api/generate"
 DEFAULT_OLLAMA_TIMEOUT = 120
-DEFAULT_OLLAMA_MODELS = ["llama3.1:8b", "qwen2.5:7b", "gemma3:4b", "hf.co/bartowski/swiss-ai_Apertus-8B-Instruct-2509-GGUF:Q4_K_M",
-]
+
+# NOTE: the list of models to evaluate and the judge ensemble now live in the
+# user-editable `models.yaml` at the project root (read via
+# over_refusal.clients.registry). To add or change a model, edit that file --
+# no Python changes needed.
 
 
 # -----------------------------------------------------------------------------
-# Default model names per backend
+# Default model names per backend.
+# These are now superseded by models.yaml for the live pipeline. They remain
+# only as the default argument of the kept ClaudeClient and of the archived
+# clients under clients/legacy/.
 # -----------------------------------------------------------------------------
 MISTRAL_DEFAULT_MODEL = "mistral-small-latest"
 OPENAI_DEFAULT_MODEL = "gpt-4.1"

@@ -20,7 +20,7 @@ import time
 import requests
 
 from over_refusal.config import get_publicai_key
-from .base import BaseClient
+from over_refusal.clients.base import BaseClient
 
 
 APERTUS_DEFAULT_MODEL = "swiss-ai/apertus-8b-instruct"

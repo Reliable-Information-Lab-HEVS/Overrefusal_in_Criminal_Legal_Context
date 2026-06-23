@@ -1,0 +1,99 @@
+# =============================================================================
+# models.yaml  --  the ONLY file you edit to add or change a model.
+# =============================================================================
+# To add a model to the benchmark, append one entry under `models:` below.
+# No Python edits are needed. After editing, run `python run.py` as usual.
+#
+# Each model entry has:
+#   name            (required) display name; also written to the CSV "model"
+#                   column and, for APIs, sent as the model id in the request.
+#   backend         (required) one of:
+#                     - ollama             local Ollama server (no API key)
+#                     - openai_compatible  any HTTP endpoint that speaks the
+#                                          OpenAI /chat/completions format
+#                                          (OpenAI, Mistral, vLLM, the Public AI
+#                                          gateway, your own internal endpoint, ...)
+#
+#   For backend: openai_compatible, also provide:
+#     base_url      (required) full chat-completions URL.
+#     api_key_env   (required) name of the environment variable that holds the
+#                   API key (the key itself stays in your .env / environment,
+#                   never in this file). Use "" if the endpoint needs no key.
+#     headers       (optional) extra HTTP headers (e.g. a required User-Agent).
+#     timeout       (optional) request timeout in seconds (default: 90).
+#     retry         (optional) retry transient 5xx/429/timeout with backoff:
+#                     max_retries / initial_backoff_seconds / backoff_multiplier
+#
+# Selection at run time (these flags filter this list, they do not bypass it):
+#   --ollama-only        keep only backend: ollama entries
+#   --api-only           keep only non-ollama entries
+#   --ollama-models A B  replace the ollama entries with the names you pass
+# =============================================================================
+
+models:
+  # ---- Local models served by Ollama (free, run on your own GPU) -----------
+  - name: "llama3.1:8b"
+    backend: ollama
+  - name: "qwen2.5:7b"
+    backend: ollama
+  - name: "gemma3:4b"
+    backend: ollama
+  - name: "hf.co/bartowski/swiss-ai_Apertus-8B-Instruct-2509-GGUF:Q4_K_M"
+    backend: ollama
+
+  # ---- Apertus via the Public AI gateway (OpenAI-compatible) ---------------
+  # Example of pointing the generic client at a hosted OpenAI-style API.
+  - name: "swiss-ai/apertus-8b-instruct"
+    backend: openai_compatible
+    base_url: "https://api.publicai.co/v1/chat/completions"
+    api_key_env: PUBLICAI_API_KEY
+    headers:
+      User-Agent: "BGer-OverRefusal-Benchmark/1.0 (HES-SO Valais research)"
+    timeout: 180
+    retry:
+      max_retries: 3
+      initial_backoff_seconds: 5.0
+      backoff_multiplier: 2.0
+
+  # ---- TEMPLATE: your own internal OpenAI-compatible endpoint --------------
+  # Uncomment and adapt. This is all the Federal Tribunal needs to plug in an
+  # in-house model: a URL and the name of the env var holding its key.
+  # - name: "tf-internal-llm"
+  #   backend: openai_compatible
+  #   base_url: "https://llm.intern.bger.admin.ch/v1/chat/completions"
+  #   api_key_env: TF_LLM_API_KEY
+
+  # ---- TEMPLATE: another local Ollama model --------------------------------
+  # - name: "mistral:7b"
+  #   backend: ollama
+
+
+# =============================================================================
+# judges  --  the LLM-as-judge ensemble (OR-Bench 3-class majority vote).
+# =============================================================================
+# Used only by judge.py (run after a benchmark to classify the saved responses).
+# The paper uses a heterogeneous 3-judge ensemble. Edit the model ids here to
+# change which judges vote; keep an odd number to avoid ties.
+#
+# Judge backends may additionally be:
+#   anthropic   Anthropic Messages API (content-block parsing; key: ANTHROPIC_API_KEY)
+#   gemini      Google Gemini API with safety filters disabled and server-side
+#               blocks recorded as refusals (key: GEMINI_API_KEY)
+# These two are kept as dedicated backends because their wire format and
+# refusal semantics differ from OpenAI's and are relied on by the methodology.
+# =============================================================================
+
+judges:
+  - name: gpt
+    backend: openai_compatible
+    model: "gpt-4.1"
+    base_url: "https://api.openai.com/v1/chat/completions"
+    api_key_env: OPENAI_API_KEY
+  - name: claude
+    backend: anthropic
+    model: "claude-sonnet-4-20250514"
+    api_key_env: ANTHROPIC_API_KEY
+  - name: gemini
+    backend: gemini
+    model: "gemini-2.5-flash"
+    api_key_env: GEMINI_API_KEY
