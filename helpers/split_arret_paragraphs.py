@@ -28,7 +28,7 @@ import sys
 from pathlib import Path
 
 LANGS = ["fr", "de", "it", "en"]
-MIN_PARA_CHARS = 25
+MIN_PARA_CHARS = 30
 
 # Output columns = EXACTLY bger_sample.csv, same order.
 COLUMNS = [
@@ -55,12 +55,21 @@ def load_rows(csv_path):
         return list(csv.DictReader(fh))
 
 
+def nonblank_lines(text):
+    return [s for s in (l.strip() for l in (text or "").split("\n")) if s]
+
 def analyze(row):
-    """Return (paras_by_lang, counts_by_lang, aligned_bool) for one source row."""
-    paras = {lang: split_paragraphs(row.get(f"text_{lang}", "")) for lang in LANGS}
+    lines = {lang: nonblank_lines(row.get(f"text_{lang}", "")) for lang in LANGS}
+    counts_raw = {lang: len(lines[lang]) for lang in LANGS}
+    # garde-fou: mêmes lignes brutes, sinon désync RÉELLE au niveau ligne
+    if len(set(counts_raw.values())) != 1:
+        return None, counts_raw, False
+    n = next(iter(counts_raw.values()))
+    keep = [i for i in range(n)
+            if min(len(lines[l][i]) for l in LANGS) > MIN_PARA_CHARS]
+    paras = {lang: [lines[lang][i] for i in keep] for lang in LANGS}
     counts = {lang: len(paras[lang]) for lang in LANGS}
-    aligned = len(set(counts.values())) == 1
-    return paras, counts, aligned
+    return paras, counts, True   # aligné par construction
 
 
 def divergence(paras, counts):
