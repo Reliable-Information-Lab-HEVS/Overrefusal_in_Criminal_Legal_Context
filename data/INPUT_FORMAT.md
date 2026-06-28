@@ -1,48 +1,52 @@
-# Input format for the over-refusal tool
+# Input format (scenario contract)
 
-The tool reads **one CSV file**, one row per case. To evaluate your own
-documents (e.g. internal Federal Tribunal cases that cannot be shared), copy
-[`template_input.csv`](template_input.csv), fill in your rows, and point the
-tool at it:
+The tool reads **one CSV file**, **one row per case**. Every input source — the
+OR-Bench category files, the BGer/real-text samples, and your own cases — uses
+the same header:
 
-```bash
-python run.py --prompts-file data/my_cases.csv --ollama-only --languages fr de it
+```
+prompt_id,or_category,bger_source,bger_url,task_fr,task_hard_fr,task_de,task_hard_de,task_it,task_hard_it,task_en,task_hard_en,orginal_language,text_fr,text_de,text_it,text_en
 ```
 
-You do **not** need to pre-build prefixed files. The authority/jailbreak prefix
-is added at run time with `--prefix` (see the main README). So the same base
-file is reused for every condition:
+You do **not** pre-build prefixed files: the authority/jailbreak prefix is added
+at run time with `--prefix` (see the main README), so the same base file is
+reused for every condition.
 
-```bash
-python run.py --prompts-file data/my_cases.csv --prefix none           # baseline
-python run.py --prompts-file data/my_cases.csv --prefix supreme-court   # authority
-```
+## Column contract
 
-## Two ways to run
+`<lang>` is one of `fr`, `de`, `it`, `en`.
 
-- **Sample data (ours):** use the files already in `data/` (`orbench_*200.csv`,
-  `bger_sample.csv`, `US_sample.csv`). Nothing to fill in — these reproduce the
-  paper.
-- **Your own data:** fill in `template_input.csv` with your cases. The text
-  never leaves your machine; only the aggregated refusal counts are produced.
+| Column | Required? | Meaning | Example |
+|--------|-----------|---------|---------|
+| `prompt_id` | **required** | Unique id for the case. | `tf_2024_001` |
+| `or_category` | **required** | Topic label used to group/filter results. Any string. | `illegal` |
+| `text_<lang>` | **required** (≥ 1 language) | The case text in that language. At least one `text_<lang>` must be non-empty. | `Le 12 mars, A. a été prévenu de vol…` |
+| `task_<lang>` | optional | Instruction prepended to the text in that language. Final prompt is `task + "\n\n" + text`. Empty ⇒ the text is sent as-is. | `Résumez le document suivant :` |
+| `task_hard_<lang>` | optional (legacy) | Old way of baking a prefix into the task. **Leave empty** — use `--prefix` instead. | *(empty)* |
+| `bger_source` | optional | Provenance label. | `OR-Bench-80k` |
+| `bger_url` | optional | Provenance URL. | *(empty)* |
+| `orginal_language` | optional | Source language, informational only (column name keeps its historical spelling). | `fr` |
 
-## Columns
+**Tolerant loader.** Missing *optional* columns are fine — the Federal Tribunal
+will often supply only one or two languages and no `task_hard_*`. A row missing
+a *required* field (`prompt_id`, `or_category`, or any text) is **skipped with a
+warning**, not silently turned into an empty prompt.
 
-| Column | Required? | Meaning |
-|--------|-----------|---------|
-| `prompt_id` | **yes** | Unique id for the case (e.g. `tf_2024_001`). |
-| `or_category` | **yes** | Topic label used to group results (e.g. `illegal`, `violence`, or your own). |
-| `task_fr` / `task_de` / `task_it` / `task_en` | **yes** (≥1 lang) | The instruction given to the model in that language (e.g. *"Summarize the following document"*). Leave a language empty to skip it. |
-| `text_fr` / `text_de` / `text_it` / `text_en` | **yes** (same langs) | The case text in that language. The final prompt is `task + text`. |
-| `orginal_language` | optional | The source language of the document (informational only; the column name keeps its historical spelling). |
-| `bger_source` / `bger_url` | optional | Provenance metadata; safe to leave empty. |
-| `task_hard_fr` / `task_hard_de` / … | optional (legacy) | Old way of baking a prefix into the task. **Leave empty** — use `--prefix` instead. |
+## How the Federal Tribunal adds its own cases
 
-## Rules
+1. Copy the template: `cp data/sample_TF.csv data/tf_cases.csv`.
+2. Replace the single `tf_example_01` row with one row per case. Fill
+   `prompt_id`, `or_category`, and the case text in **at least one** language
+   (`text_fr` / `text_de` / `text_it` / `text_en`). Add a `task_<lang>`
+   instruction if you want one (e.g. a summary request). Leave everything else
+   empty.
+3. Run it — the documents never leave the machine; only aggregated refusal
+   counts are written:
 
-- One row = one case. Give every row a unique `prompt_id`.
-- Only fill the languages you want to test. The tool runs whichever languages
-  you pass to `--languages` and skips a case that has no text for a language.
-- The file must be UTF-8 encoded.
-- The two `<...>` placeholders in `template_input.csv` are just hints — replace
-  them with real text or delete the example row.
+   ```bash
+   python run.py --prompts-file data/tf_cases.csv --ollama-only --languages fr de
+   python run.py --prompts-file data/tf_cases.csv --ollama-only --languages fr de --prefix supreme-court
+   ```
+
+The file must be **UTF-8** encoded, and each `prompt_id` must be unique. See
+[`sample_TF.csv`](sample_TF.csv) for a working one-row example.

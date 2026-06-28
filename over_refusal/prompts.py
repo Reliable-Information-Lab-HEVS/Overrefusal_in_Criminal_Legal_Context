@@ -1,10 +1,29 @@
-"""Load BGer prompts from CSV.
+"""Load evaluation scenarios from a CSV (the input contract).
 
-The CSV has one row per case with columns:
+All input sources — the OR-Bench category files, the BGer/real-text samples and
+the Federal Tribunal's own cases — share ONE canonical header:
+
   prompt_id, or_category, bger_source, bger_url,
-  task_fr, task_de, task_it, task_en,                 -- "normal" task (summary)
-  task_hard_fr, task_hard_de, task_hard_it, task_hard_en,  -- "hard" task (more specific)
-  text_fr, text_de, text_it, text_en                   -- case facts in 4 languages
+  task_fr, task_hard_fr, task_de, task_hard_de, task_it, task_hard_it,
+  task_en, task_hard_en, orginal_language,
+  text_fr, text_de, text_it, text_en
+
+Column contract (see data/INPUT_FORMAT.md for the full table):
+
+  REQUIRED   prompt_id           unique id for the case
+             or_category         topic label used for grouping/filtering
+             text_<lang>         the case text in at least ONE supported language
+
+  OPTIONAL   text_<other langs>  additional languages
+             task_<lang>         instruction prepended to the text ("normal" task)
+             task_hard_<lang>    legacy "hard" task variant
+             bger_source/_url    provenance metadata
+             orginal_language    informational only
+
+The loader is tolerant: missing optional columns are fine (the Tribunal will
+often supply only one or two languages and no task_hard_*), and a row missing a
+REQUIRED field is skipped with a warning rather than producing a malformed
+prompt. Existing full-schema CSVs load exactly as before.
 
 Filtering options:
   - categories: keep only rows whose or_category is in this list
@@ -14,6 +33,7 @@ Filtering options:
 """
 
 import csv
+import sys
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -22,6 +42,17 @@ from over_refusal.config import DEFAULT_PROMPTS_FILE, SUPPORTED_LANGUAGES
 
 # Valid task modes. "all" emits both variants for the same case.
 TASK_MODES = ("normal", "hard", "all")
+
+# --- Canonical column contract -------------------------------------------------
+# A row needs prompt_id, or_category and at least one text_<lang> to be usable;
+# everything else is optional and tolerated when absent.
+REQUIRED_COLUMNS = ("prompt_id", "or_category")
+TEXT_COLUMNS = tuple(f"text_{lang}" for lang in SUPPORTED_LANGUAGES)
+OPTIONAL_COLUMNS = (
+    tuple(f"task_{lang}" for lang in SUPPORTED_LANGUAGES)
+    + tuple(f"task_hard_{lang}" for lang in SUPPORTED_LANGUAGES)
+    + ("bger_source", "bger_url", "orginal_language")
+)
 
 
 def _build_prompt_text(task: str, text: str) -> str:
@@ -53,6 +84,24 @@ def _make_entry(row: dict, task_col_prefix: str) -> dict:
     return entry
 
 
+def _row_problem(row: dict) -> Optional[str]:
+    """Return a human-readable reason if a REQUIRED field is missing, else None.
+
+    Required = a non-empty prompt_id, a non-empty or_category, and case text in
+    at least one supported language. Optional columns (other languages,
+    task_hard_*, provenance) are never required here.
+    """
+    if not (row.get("prompt_id") or "").strip():
+        return "missing prompt_id"
+    pid = row["prompt_id"].strip()
+    if not (row.get("or_category") or "").strip():
+        return f"{pid}: missing or_category"
+    if not any((row.get(col) or "").strip() for col in TEXT_COLUMNS):
+        langs = "/".join(SUPPORTED_LANGUAGES)
+        return f"{pid}: no text in any language (need one of text_{{{langs}}})"
+    return None
+
+
 def load_prompts_from_csv(
     csv_path: str = None,
     categories: Optional[List[str]] = None,
@@ -66,6 +115,9 @@ def load_prompts_from_csv(
       - "normal": use task_XX columns
       - "hard":   use task_hard_XX columns
       - "all":    emit both variants; IDs become bgr_01__normal / bgr_01__hard
+
+    Rows missing a required field (prompt_id, or_category, or any text) are
+    skipped with a warning on stderr; missing optional columns are tolerated.
     """
     if task_mode not in TASK_MODES:
         raise ValueError(f"task_mode must be one of {TASK_MODES}, got '{task_mode}'")
@@ -79,10 +131,33 @@ def load_prompts_from_csv(
 
     prompts: Dict[str, Dict] = {}
     rows_kept = 0
+    skipped = 0
 
     with open(csv_path, "r", encoding="utf-8") as fh:
         reader = csv.DictReader(fh)
-        for row in reader:
+
+        # Light header check: warn (don't crash) if a required column is absent.
+        header = reader.fieldnames or []
+        missing_required = [c for c in REQUIRED_COLUMNS if c not in header]
+        if not any(c in header for c in TEXT_COLUMNS):
+            missing_required.append("text_<lang> (need at least one)")
+        if missing_required:
+            print(
+                f"[prompts] warning: {csv_path.name} is missing required column(s): "
+                f"{', '.join(missing_required)}",
+                file=sys.stderr,
+            )
+
+        for line_no, row in enumerate(reader, start=2):  # line 1 is the header
+            problem = _row_problem(row)
+            if problem:
+                print(
+                    f"[prompts] skipping row {line_no} ({csv_path.name}): {problem}",
+                    file=sys.stderr,
+                )
+                skipped += 1
+                continue
+
             pid = row["prompt_id"].strip()
             category = row.get("or_category", "").strip()
 
@@ -104,6 +179,12 @@ def load_prompts_from_csv(
             rows_kept += 1
             if limit is not None and rows_kept >= limit:
                 break
+
+    if skipped:
+        print(
+            f"[prompts] {csv_path.name}: kept {rows_kept} row(s), skipped {skipped}",
+            file=sys.stderr,
+        )
 
     return prompts
 
