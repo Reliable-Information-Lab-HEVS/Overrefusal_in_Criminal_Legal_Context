@@ -4,7 +4,7 @@ All input sources — the OR-Bench category files, the BGer/real-text samples an
 the Federal Tribunal's own cases — share ONE canonical header:
 
   prompt_id, or_category, bger_source, bger_url,
-  task_fr, task_de, task_it, task_en, orginal_language,
+  task01_fr, task01_de, task01_it, task01_en, orginal_language,
   text_fr, text_de, text_it, text_en
 
 Column contract (see data/INPUT_FORMAT.md for the full table):
@@ -14,7 +14,8 @@ Column contract (see data/INPUT_FORMAT.md for the full table):
              text_<lang>         the case text in at least ONE supported language
 
   OPTIONAL   text_<other langs>  additional languages
-             task_<lang>         instruction prepended to the text (the task)
+             task01_<lang>       instruction prepended to the text (task01; add
+                                 task02_<lang>, task03_<lang>, … for more tasks)
              bger_source/_url    provenance metadata
              orginal_language    informational only
 
@@ -43,13 +44,14 @@ from over_refusal.config import DEFAULT_PROMPTS_FILE, SUPPORTED_LANGUAGES
 
 # --- Task registry ------------------------------------------------------------
 # A "task" is one column family in the CSV: task name -> CSV column prefix.
-# This is the SINGLE place tasks are declared. To add another task later:
-#   1. add one entry here, e.g.  "extract": "task_extract"
-#   2. add the matching columns  task_extract_<lang>  to your CSV.
+# Tasks are numbered task01, task02, … This is the SINGLE place they are
+# declared. To add task03 (and beyond):
+#   1. add one entry here, e.g.  "task03": "task03"
+#   2. add the matching columns  task03_<lang>  to your CSV.
 # Nothing else changes: TASK_MODES, the --task-mode choices, and the "all"
 # behavior all derive from this registry.
 TASK_REGISTRY = {
-    "normal": "task",        # the task_<lang> instruction columns
+    "task01": "task01",      # columns task01_<lang>
 }
 
 # Valid task modes: each registered task name, plus "all" (emit every registered
@@ -83,7 +85,7 @@ def _build_prompt_text(task: str, text: str) -> str:
 def _make_entry(row: dict, task_name: str) -> dict:
     """Turn one CSV row into a prompt entry dict, for a given registered task.
 
-    ``task_name`` is a key of TASK_REGISTRY (e.g. "normal"); its CSV column
+    ``task_name`` is a key of TASK_REGISTRY (e.g. "task01"); its CSV column
     prefix is looked up there. ``task_variant`` records the task name, which is
     what the results CSV stores.
     """
@@ -124,14 +126,14 @@ def load_prompts_from_csv(
     categories: Optional[List[str]] = None,
     prompt_ids: Optional[List[str]] = None,
     limit: Optional[int] = None,
-    task_mode: str = "normal",
+    task_mode: str = "task01",
 ) -> Dict[str, Dict]:
     """Load prompts from CSV with optional filtering.
 
     task_mode:
-      - "normal": use the task_<lang> columns (the default task)
+      - "task01": use the task01_<lang> columns (the default task)
       - "all":    emit every registered task as its own variant; IDs become
-                  e.g. bgr_01__normal
+                  e.g. bgr_01__task01
 
     Rows missing a required field (prompt_id, or_category, or any text) are
     skipped with a warning on stderr; missing optional columns are tolerated.
@@ -212,7 +214,7 @@ def get_all_prompts(
     categories: Optional[List[str]] = None,
     prompt_ids: Optional[List[str]] = None,
     limit: Optional[int] = None,
-    task_mode: str = "normal",
+    task_mode: str = "task01",
 ) -> Dict[str, Dict]:
     return load_prompts_from_csv(
         csv_path=csv_path,

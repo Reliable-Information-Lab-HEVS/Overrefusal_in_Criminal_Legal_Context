@@ -75,7 +75,7 @@ class EvaluationRunner:
         categories: Optional[List[str]] = None,
         prompt_ids: Optional[List[str]] = None,
         limit: Optional[int] = None,
-        task_mode: str = "normal",
+        task_mode: str = "task01",
         prefix: str = "none",
         models_file: Optional[str] = None,
     ) -> List[Dict]:
@@ -141,7 +141,7 @@ class EvaluationRunner:
         # Triple loop: prompt x language x model
         for prompt_id, prompt_data in prompts.items():
             category = prompt_data["category"]
-            task_variant = prompt_data.get("task_variant", "normal")
+            task_variant = prompt_data.get("task_variant", "task01")
             domain = "BGR/legal" if prompt_id.startswith("bgr") else "general"
 
             for language in languages:
@@ -252,8 +252,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
                         help="Limit total number of prompts (after filters)")
 
     # --- Task variant ---
-    parser.add_argument("--task-mode", choices=list(TASK_MODES), default="normal",
-                        help="Which registered task to use (default: normal); "
+    parser.add_argument("--task-mode", choices=list(TASK_MODES), default="task01",
+                        help="Which registered task to use (default: task01); "
                              "'all' emits every registered task as its own variant")
 
     # --- Prefix condition (injected at run time) ---

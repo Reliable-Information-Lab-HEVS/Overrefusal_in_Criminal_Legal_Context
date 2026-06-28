@@ -7,7 +7,7 @@ that the refactor must NOT change:
   * the "[ERROR] ..." backend-error contract (returned, never raised),
   * the keyword refusal detector (opening-window + EN fallback),
   * the apply_prefix ValueError guard (no silent language fallback),
-  * prompt loading for the normal / hard / all task modes.
+  * prompt loading for the task01 / all task modes.
 
 Usage:
     python tests/smoke_test.py
@@ -83,11 +83,11 @@ def test_prefix_guard():
 
 def test_prompts_loading():
     print("prompts:")
-    normal = get_all_prompts(csv_path=SAMPLE_CSV, limit=2, task_mode="normal")
-    check("normal loads rows", len(normal) > 0)
-    if normal:
-        entry = next(iter(normal.values()))
-        check("entry has task_variant=normal", entry.get("task_variant") == "normal")
+    single = get_all_prompts(csv_path=SAMPLE_CSV, limit=2, task_mode="task01")
+    check("task01 loads rows", len(single) > 0)
+    if single:
+        entry = next(iter(single.values()))
+        check("entry has task_variant=task01", entry.get("task_variant") == "task01")
         check("entry has 'en' text", "en" in entry)
     allmode = get_all_prompts(csv_path=SAMPLE_CSV, limit=2, task_mode="all")
     check("all-mode emits a __<task> id for every registered task",
@@ -103,7 +103,7 @@ def test_run_columns_and_error_contract():
         languages=["en"],
         prompts_file=SAMPLE_CSV,
         limit=1,
-        task_mode="normal",
+        task_mode="task01",
         prefix="none",
     )
     check("produced at least one result", len(results) > 0)
