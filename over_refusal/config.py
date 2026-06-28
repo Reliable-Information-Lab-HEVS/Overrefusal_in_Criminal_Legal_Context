@@ -40,16 +40,10 @@ DEFAULT_OLLAMA_TIMEOUT = 120
 
 
 # -----------------------------------------------------------------------------
-# Default model names per backend.
-# These are now superseded by models.yaml for the live pipeline. They remain
-# only as the default argument of the kept ClaudeClient and of the archived
-# clients under clients/legacy/.
+# Default model name for the Claude judge backend (clients/claude.py). All other
+# models/judges are declared in models.yaml and resolved by the registry.
 # -----------------------------------------------------------------------------
-MISTRAL_DEFAULT_MODEL = "mistral-small-latest"
-OPENAI_DEFAULT_MODEL = "gpt-4.1"
 CLAUDE_DEFAULT_MODEL = "claude-sonnet-4-20250514"
-GEMINI_DEFAULT_MODEL = "gemini-2.5-flash"
-APERTUS_DEFAULT_MODEL = "swiss-ai/apertus-8b-instruct"
 
 # -----------------------------------------------------------------------------
 # Languages: Swiss official languages plus English for publication
@@ -76,23 +70,8 @@ JUDGE_PROMPT_FILE = str(PACKAGE_DATA_DIR / "judge_prompt.txt")
 
 
 # -----------------------------------------------------------------------------
-# API key getters — env only, no fallback to hardcoded values
+# API key getter for the Claude judge backend (env only). Other backends read
+# their key from the env var named in models.yaml (api_key_env).
 # -----------------------------------------------------------------------------
-def get_mistral_key() -> str:
-    return os.environ.get("MISTRAL_API_KEY", "")
-
-
-def get_openai_key() -> str:
-    return os.environ.get("OPENAI_API_KEY", "")
-
-
 def get_anthropic_key() -> str:
     return os.environ.get("ANTHROPIC_API_KEY", "")
-
-
-def get_gemini_key() -> str:
-    return os.environ.get("GEMINI_API_KEY", "")
-
-
-def get_publicai_key():
-    return os.getenv("PUBLICAI_API_KEY", "")

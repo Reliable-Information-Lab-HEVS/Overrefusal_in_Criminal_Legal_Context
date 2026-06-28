@@ -26,7 +26,7 @@ Across four models in the 4–8B range (Llama 3.1, Gemma 4 E4B, Qwen 3, Apertus 
 │   ├── clients/               # Ollama + OpenAI-compatible backends + registry.py
 │   ├── evaluation.py          # main run loop
 │   └── data/refusal_keywords.json  # keyword lists for EN/FR/DE/IT
-├── helpers/                   # extraction / translation / analysis utilities
+├── helpers/                   # extract_orbench.py, translate_prompts.py (data prep)
 ├── results/                   # precomputed result CSVs (english/, french_german/)
 ├── models.yaml                # models & judges to run (only file to edit to add a model)
 ├── roles.yaml                 # authority/role prefix wordings, per language
@@ -143,12 +143,7 @@ done
 
 A precomputed `is_refused` column is included in every result CSV. The detector (`over_refusal/detector.py`) scans the opening of each response (length controlled by `OPENING_WINDOW_CHARS`) for the language-specific refusal phrases in `over_refusal/data/refusal_keywords.json`. The French and German lists were extended from native model outputs to capture phrasings that direct translation misses. An optional LLM-as-judge second pass (`over_refusal/judge.py`, OR-Bench 3-class taxonomy with a majority-vote ensemble) can be run on the saved responses; the judges are configured in `models.yaml`.
 
-### Reproducing the figures and tables
-
-```bash
-python helpers/heatmap.py                # writes heatmap_english.png
-python helpers/summary_frde.py           # prints FR/DE summary used in Table 1
-```
+The main figure (`heatmap_english.png`) is shipped precomputed.
 
 ## Prefix conditions
 
