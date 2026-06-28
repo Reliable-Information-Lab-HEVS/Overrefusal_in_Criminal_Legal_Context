@@ -32,6 +32,13 @@ will often supply only one or two languages and no `task_hard_*`. A row missing
 a *required* field (`prompt_id`, `or_category`, or any text) is **skipped with a
 warning**, not silently turned into an empty prompt.
 
+**Adding a task.** A "task" is one column family selected by `--task-mode`.
+Today there are two: `normal` (columns `task_<lang>`) and `hard` (columns
+`task_hard_<lang>`). To add a third, add one entry to `TASK_REGISTRY` in
+`over_refusal/prompts.py` (e.g. `"extract": "task_extract"`) and the matching
+`task_extract_<lang>` columns to your CSV — it then appears automatically as a
+valid `--task-mode extract` (and is included by `--task-mode all`).
+
 ## How the Federal Tribunal adds its own cases
 
 1. Copy the template: `cp data/sample_TF.csv data/tf_cases.csv`.

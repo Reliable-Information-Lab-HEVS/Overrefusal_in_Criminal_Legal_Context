@@ -40,8 +40,22 @@ from typing import Dict, List, Optional
 from over_refusal.config import DEFAULT_PROMPTS_FILE, SUPPORTED_LANGUAGES
 
 
-# Valid task modes. "all" emits both variants for the same case.
-TASK_MODES = ("normal", "hard", "all")
+# --- Task registry ------------------------------------------------------------
+# A "task" is one column family in the CSV: task name -> CSV column prefix.
+# This is the SINGLE place tasks are declared. To add a third task later:
+#   1. add one entry here, e.g.  "extract": "task_extract"
+#   2. add the matching columns  task_extract_<lang>  to your CSV.
+# Nothing else changes: TASK_MODES, the --task-mode choices, and the "all"
+# behavior all derive from this registry.
+TASK_REGISTRY = {
+    "normal": "task",        # existing task_<lang> columns
+    "hard": "task_hard",     # existing task_hard_<lang> columns
+}
+
+# Valid task modes: each registered task name, plus "all" (emit every registered
+# task as its own variant). Derived from the registry, so a new entry above
+# automatically becomes a valid --task-mode value.
+TASK_MODES = tuple(TASK_REGISTRY) + ("all",)
 
 # --- Canonical column contract -------------------------------------------------
 # A row needs prompt_id, or_category and at least one text_<lang> to be usable;
@@ -49,8 +63,8 @@ TASK_MODES = ("normal", "hard", "all")
 REQUIRED_COLUMNS = ("prompt_id", "or_category")
 TEXT_COLUMNS = tuple(f"text_{lang}" for lang in SUPPORTED_LANGUAGES)
 OPTIONAL_COLUMNS = (
-    tuple(f"task_{lang}" for lang in SUPPORTED_LANGUAGES)
-    + tuple(f"task_hard_{lang}" for lang in SUPPORTED_LANGUAGES)
+    tuple(f"{prefix}_{lang}" for prefix in TASK_REGISTRY.values()
+          for lang in SUPPORTED_LANGUAGES)
     + ("bger_source", "bger_url", "orginal_language")
 )
 
@@ -66,19 +80,22 @@ def _build_prompt_text(task: str, text: str) -> str:
     return f"{task}\n\n{text}"
 
 
-def _make_entry(row: dict, task_col_prefix: str) -> dict:
-    """Turn one CSV row into a prompt entry dict, for a given task column.
+def _make_entry(row: dict, task_name: str) -> dict:
+    """Turn one CSV row into a prompt entry dict, for a given registered task.
 
-    task_col_prefix is either "task" (normal) or "task_hard".
+    ``task_name`` is a key of TASK_REGISTRY (e.g. "normal"/"hard"); its CSV
+    column prefix is looked up there. ``task_variant`` records the task name,
+    which is what the results CSV stores.
     """
+    col_prefix = TASK_REGISTRY[task_name]
     entry = {
         "category": row.get("or_category", "").strip(),
         "source": row.get("bger_source", "").strip(),
         "url": row.get("bger_url", "").strip(),
-        "task_variant": "normal" if task_col_prefix == "task" else "hard",
+        "task_variant": task_name,
     }
     for lang in SUPPORTED_LANGUAGES:
-        task = row.get(f"{task_col_prefix}_{lang}", "")
+        task = row.get(f"{col_prefix}_{lang}", "")
         text = row.get(f"text_{lang}", "")
         entry[lang] = _build_prompt_text(task, text)
     return entry
@@ -167,14 +184,14 @@ def load_prompts_from_csv(
             if prompt_ids and pid not in prompt_ids:
                 continue
 
-            # Build entries depending on task_mode
-            if task_mode == "normal":
-                prompts[pid] = _make_entry(row, "task")
-            elif task_mode == "hard":
-                prompts[pid] = _make_entry(row, "task_hard")
-            else:  # "all"
-                prompts[f"{pid}__normal"] = _make_entry(row, "task")
-                prompts[f"{pid}__hard"] = _make_entry(row, "task_hard")
+            # Build entries depending on task_mode.
+            # "all" emits one variant per registered task (id -> pid__<task>);
+            # any other value is a single registered task name (id -> pid).
+            if task_mode == "all":
+                for name in TASK_REGISTRY:
+                    prompts[f"{pid}__{name}"] = _make_entry(row, name)
+            else:
+                prompts[pid] = _make_entry(row, task_mode)
 
             rows_kept += 1
             if limit is not None and rows_kept >= limit:
