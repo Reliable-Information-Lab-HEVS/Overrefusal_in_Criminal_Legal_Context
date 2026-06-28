@@ -3,14 +3,14 @@
 All input sources — the OR-Bench category files, the BGer/real-text samples and
 the Federal Tribunal's own cases — share ONE canonical header:
 
-  prompt_id, or_category, bger_source, bger_url,
+  prompt_id, category, bger_source, bger_url,
   task01_fr, task01_de, task01_it, task01_en, orginal_language,
   text_fr, text_de, text_it, text_en
 
 Column contract (see data/INPUT_FORMAT.md for the full table):
 
   REQUIRED   prompt_id           unique id for the case
-             or_category         topic label used for grouping/filtering
+             category         topic label used for grouping/filtering
              text_<lang>         the case text in at least ONE supported language
 
   OPTIONAL   text_<other langs>  additional languages
@@ -28,7 +28,7 @@ missing a REQUIRED field is skipped with a warning rather than producing a
 malformed prompt. Existing CSVs load exactly as before.
 
 Filtering options:
-  - categories: keep only rows whose or_category is in this list
+  - categories: keep only rows whose category is in this list
   - prompt_ids: keep only specific prompt_ids
   - limit: cap the number of source rows
   - task_mode: which task column to use (see below)
@@ -60,9 +60,9 @@ TASK_REGISTRY = {
 TASK_MODES = tuple(TASK_REGISTRY) + ("all",)
 
 # --- Canonical column contract -------------------------------------------------
-# A row needs prompt_id, or_category and at least one text_<lang> to be usable;
+# A row needs prompt_id, category and at least one text_<lang> to be usable;
 # everything else is optional and tolerated when absent.
-REQUIRED_COLUMNS = ("prompt_id", "or_category")
+REQUIRED_COLUMNS = ("prompt_id", "category")
 TEXT_COLUMNS = tuple(f"text_{lang}" for lang in SUPPORTED_LANGUAGES)
 OPTIONAL_COLUMNS = (
     tuple(f"{prefix}_{lang}" for prefix in TASK_REGISTRY.values()
@@ -91,7 +91,7 @@ def _make_entry(row: dict, task_name: str) -> dict:
     """
     col_prefix = TASK_REGISTRY[task_name]
     entry = {
-        "category": row.get("or_category", "").strip(),
+        "category": row.get("category", "").strip(),
         "source": row.get("bger_source", "").strip(),
         "url": row.get("bger_url", "").strip(),
         "task_variant": task_name,
@@ -106,15 +106,15 @@ def _make_entry(row: dict, task_name: str) -> dict:
 def _row_problem(row: dict) -> Optional[str]:
     """Return a human-readable reason if a REQUIRED field is missing, else None.
 
-    Required = a non-empty prompt_id, a non-empty or_category, and case text in
+    Required = a non-empty prompt_id, a non-empty category, and case text in
     at least one supported language. Optional columns (other languages, task_*,
     provenance) are never required here.
     """
     if not (row.get("prompt_id") or "").strip():
         return "missing prompt_id"
     pid = row["prompt_id"].strip()
-    if not (row.get("or_category") or "").strip():
-        return f"{pid}: missing or_category"
+    if not (row.get("category") or "").strip():
+        return f"{pid}: missing category"
     if not any((row.get(col) or "").strip() for col in TEXT_COLUMNS):
         langs = "/".join(SUPPORTED_LANGUAGES)
         return f"{pid}: no text in any language (need one of text_{{{langs}}})"
@@ -135,7 +135,7 @@ def load_prompts_from_csv(
       - "all":    emit every registered task as its own variant; IDs become
                   e.g. bgr_01__task01
 
-    Rows missing a required field (prompt_id, or_category, or any text) are
+    Rows missing a required field (prompt_id, category, or any text) are
     skipped with a warning on stderr; missing optional columns are tolerated.
     """
     if task_mode not in TASK_MODES:
@@ -178,7 +178,7 @@ def load_prompts_from_csv(
                 continue
 
             pid = row["prompt_id"].strip()
-            category = row.get("or_category", "").strip()
+            category = row.get("category", "").strip()
 
             # Apply filters
             if categories and category not in categories:

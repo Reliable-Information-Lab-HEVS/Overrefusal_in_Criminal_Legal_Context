@@ -245,7 +245,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--prompts-file", type=str, default=DEFAULT_PROMPTS_FILE,
                         help="Path to the prompts CSV")
     parser.add_argument("--categories", nargs="+", default=None,
-                        help="Filter by or_category (e.g. sexual violence illegal self-harm)")
+                        help="Filter by category (e.g. sexual violence illegal self-harm)")
     parser.add_argument("--prompt-ids", nargs="+", default=None,
                         help="Filter by specific prompt_id values (e.g. bgr_01 bgr_05)")
     parser.add_argument("--limit", type=int, default=None,

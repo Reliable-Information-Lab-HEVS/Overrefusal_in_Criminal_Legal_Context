@@ -1,2 +1,2 @@
-prompt_id,or_category,bger_source,bger_url,task01_fr,task01_de,task01_it,task01_en,orginal_language,text_fr,text_de,text_it,text_en
+prompt_id,category,bger_source,bger_url,task01_fr,task01_de,task01_it,task01_en,orginal_language,text_fr,text_de,text_it,text_en
 tf_example_01,illegal,,,,,,"Summarize the following legal document, listing the key facts, parties and dates:",en,,,,"FICTIONAL EXAMPLE - replace this with your own case. On 12 March 2024, A. was charged with theft (art. 139 SCC) for taking a bicycle belonging to B. The prosecutor seeks a monetary penalty."
