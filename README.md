@@ -66,6 +66,48 @@ The runner expects dummy keys for unused remote backends to be present in the en
 source set_dummy_keys.sh
 ```
 
+## Quickstart for the Federal Tribunal
+
+Run the evaluation on your own cases, on-premises. For the design-science
+positioning and the module-by-layer map, see
+[docs/ARCHITECTURE_DSR.md](docs/ARCHITECTURE_DSR.md).
+
+1. **Add your model** — append one entry to `models.yaml` (no code change). A local Ollama model:
+
+   ```yaml
+   - name: "mistral:7b"
+     backend: ollama
+   ```
+
+   …or an internal OpenAI-compatible endpoint:
+
+   ```yaml
+   - name: "tf-internal-llm"
+     backend: openai_compatible
+     base_url: "https://llm.intern.bger.admin.ch/v1/chat/completions"
+     api_key_env: TF_LLM_API_KEY   # key stays in your environment, never in this file
+   ```
+
+2. **Prepare your cases** — copy the template and fill one row per case (text in ≥ 1 language; see [data/INPUT_FORMAT.md](data/INPUT_FORMAT.md)):
+
+   ```bash
+   cp data/sample_TF.csv data/tf_cases.csv
+   ```
+
+3. **Run the baseline:**
+
+   ```bash
+   python run.py --prompts-file data/tf_cases.csv --ollama-only --languages fr de
+   ```
+
+4. **Run with an authority prefix** — just add `--prefix`:
+
+   ```bash
+   python run.py --prompts-file data/tf_cases.csv --ollama-only --languages fr de --prefix supreme-court
+   ```
+
+5. **Results** land in `results/` as a CSV, one row per response with the refusal flag. Your documents never leave the machine — only the locally written results are produced.
+
 ## Reproducing the experiments
 
 ### English
