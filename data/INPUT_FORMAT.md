@@ -5,7 +5,7 @@ OR-Bench category files, the BGer/real-text samples, and your own cases — uses
 the same header:
 
 ```
-prompt_id,or_category,bger_source,bger_url,task_fr,task_hard_fr,task_de,task_hard_de,task_it,task_hard_it,task_en,task_hard_en,orginal_language,text_fr,text_de,text_it,text_en
+prompt_id,or_category,bger_source,bger_url,task_fr,task_de,task_it,task_en,orginal_language,text_fr,text_de,text_it,text_en
 ```
 
 You do **not** pre-build prefixed files: the authority/jailbreak prefix is added
@@ -22,22 +22,22 @@ reused for every condition.
 | `or_category` | **required** | Topic label used to group/filter results. Any string. | `illegal` |
 | `text_<lang>` | **required** (≥ 1 language) | The case text in that language. At least one `text_<lang>` must be non-empty. | `Le 12 mars, A. a été prévenu de vol…` |
 | `task_<lang>` | optional | Instruction prepended to the text in that language. Final prompt is `task + "\n\n" + text`. Empty ⇒ the text is sent as-is. | `Résumez le document suivant :` |
-| `task_hard_<lang>` | optional (legacy) | Old way of baking a prefix into the task. **Leave empty** — use `--prefix` instead. | *(empty)* |
 | `bger_source` | optional | Provenance label. | `OR-Bench-80k` |
 | `bger_url` | optional | Provenance URL. | *(empty)* |
 | `orginal_language` | optional | Source language, informational only (column name keeps its historical spelling). | `fr` |
 
 **Tolerant loader.** Missing *optional* columns are fine — the Federal Tribunal
-will often supply only one or two languages and no `task_hard_*`. A row missing
-a *required* field (`prompt_id`, `or_category`, or any text) is **skipped with a
-warning**, not silently turned into an empty prompt.
+will often supply only one or two languages and no `task_<lang>` instruction. A
+row missing a *required* field (`prompt_id`, `or_category`, or any text) is
+**skipped with a warning**, not silently turned into an empty prompt.
 
 **Adding a task.** A "task" is one column family selected by `--task-mode`.
-Today there are two: `normal` (columns `task_<lang>`) and `hard` (columns
-`task_hard_<lang>`). To add a third, add one entry to `TASK_REGISTRY` in
-`over_refusal/prompts.py` (e.g. `"extract": "task_extract"`) and the matching
-`task_extract_<lang>` columns to your CSV — it then appears automatically as a
-valid `--task-mode extract` (and is included by `--task-mode all`).
+There is currently one: `normal` (columns `task_<lang>`). To add another, add one
+entry to `TASK_REGISTRY` in `over_refusal/prompts.py`
+(e.g. `"extract": "task_extract"`) and the matching `task_extract_<lang>` columns
+to your CSV — it then appears automatically as a valid `--task-mode extract`
+(and is included by `--task-mode all`). Authority/role framing is separate: it is
+added at run time with `--prefix` (see `roles.yaml`), not as a task column.
 
 ## How the Federal Tribunal adds its own cases
 

@@ -253,7 +253,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
     # --- Task variant ---
     parser.add_argument("--task-mode", choices=list(TASK_MODES), default="normal",
-                        help="Which task column to use: normal, hard, or all (both)")
+                        help="Which registered task to use (default: normal); "
+                             "'all' emits every registered task as its own variant")
 
     # --- Prefix condition (injected at run time) ---
     parser.add_argument("--prefix", choices=PREFIX_CHOICES, default="none",

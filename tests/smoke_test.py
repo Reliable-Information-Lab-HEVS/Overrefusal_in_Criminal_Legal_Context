@@ -25,7 +25,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from over_refusal.detector import RefusalDetector
 from over_refusal.evaluation import EvaluationRunner
 from over_refusal.prefixes import apply_prefix
-from over_refusal.prompts import get_all_prompts
+from over_refusal.prompts import TASK_REGISTRY, get_all_prompts
 
 
 # The exact columns every result row must carry (the saved CSV header).
@@ -90,9 +90,8 @@ def test_prompts_loading():
         check("entry has task_variant=normal", entry.get("task_variant") == "normal")
         check("entry has 'en' text", "en" in entry)
     allmode = get_all_prompts(csv_path=SAMPLE_CSV, limit=2, task_mode="all")
-    check("all-mode emits __normal/__hard ids",
-          any(k.endswith("__normal") for k in allmode)
-          and any(k.endswith("__hard") for k in allmode))
+    check("all-mode emits a __<task> id for every registered task",
+          all(any(k.endswith(f"__{t}") for k in allmode) for t in TASK_REGISTRY))
 
 
 def test_run_columns_and_error_contract():

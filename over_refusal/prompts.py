@@ -4,8 +4,7 @@ All input sources — the OR-Bench category files, the BGer/real-text samples an
 the Federal Tribunal's own cases — share ONE canonical header:
 
   prompt_id, or_category, bger_source, bger_url,
-  task_fr, task_hard_fr, task_de, task_hard_de, task_it, task_hard_it,
-  task_en, task_hard_en, orginal_language,
+  task_fr, task_de, task_it, task_en, orginal_language,
   text_fr, text_de, text_it, text_en
 
 Column contract (see data/INPUT_FORMAT.md for the full table):
@@ -15,15 +14,17 @@ Column contract (see data/INPUT_FORMAT.md for the full table):
              text_<lang>         the case text in at least ONE supported language
 
   OPTIONAL   text_<other langs>  additional languages
-             task_<lang>         instruction prepended to the text ("normal" task)
-             task_hard_<lang>    legacy "hard" task variant
+             task_<lang>         instruction prepended to the text (the task)
              bger_source/_url    provenance metadata
              orginal_language    informational only
 
+Authority/role framing is NOT a column: it is injected at run time with
+--prefix (see prefixes.py / roles.yaml).
+
 The loader is tolerant: missing optional columns are fine (the Tribunal will
-often supply only one or two languages and no task_hard_*), and a row missing a
-REQUIRED field is skipped with a warning rather than producing a malformed
-prompt. Existing full-schema CSVs load exactly as before.
+often supply only one or two languages and no task instruction), and a row
+missing a REQUIRED field is skipped with a warning rather than producing a
+malformed prompt. Existing CSVs load exactly as before.
 
 Filtering options:
   - categories: keep only rows whose or_category is in this list
@@ -42,14 +43,13 @@ from over_refusal.config import DEFAULT_PROMPTS_FILE, SUPPORTED_LANGUAGES
 
 # --- Task registry ------------------------------------------------------------
 # A "task" is one column family in the CSV: task name -> CSV column prefix.
-# This is the SINGLE place tasks are declared. To add a third task later:
+# This is the SINGLE place tasks are declared. To add another task later:
 #   1. add one entry here, e.g.  "extract": "task_extract"
 #   2. add the matching columns  task_extract_<lang>  to your CSV.
 # Nothing else changes: TASK_MODES, the --task-mode choices, and the "all"
 # behavior all derive from this registry.
 TASK_REGISTRY = {
-    "normal": "task",        # existing task_<lang> columns
-    "hard": "task_hard",     # existing task_hard_<lang> columns
+    "normal": "task",        # the task_<lang> instruction columns
 }
 
 # Valid task modes: each registered task name, plus "all" (emit every registered
@@ -83,9 +83,9 @@ def _build_prompt_text(task: str, text: str) -> str:
 def _make_entry(row: dict, task_name: str) -> dict:
     """Turn one CSV row into a prompt entry dict, for a given registered task.
 
-    ``task_name`` is a key of TASK_REGISTRY (e.g. "normal"/"hard"); its CSV
-    column prefix is looked up there. ``task_variant`` records the task name,
-    which is what the results CSV stores.
+    ``task_name`` is a key of TASK_REGISTRY (e.g. "normal"); its CSV column
+    prefix is looked up there. ``task_variant`` records the task name, which is
+    what the results CSV stores.
     """
     col_prefix = TASK_REGISTRY[task_name]
     entry = {
@@ -105,8 +105,8 @@ def _row_problem(row: dict) -> Optional[str]:
     """Return a human-readable reason if a REQUIRED field is missing, else None.
 
     Required = a non-empty prompt_id, a non-empty or_category, and case text in
-    at least one supported language. Optional columns (other languages,
-    task_hard_*, provenance) are never required here.
+    at least one supported language. Optional columns (other languages, task_*,
+    provenance) are never required here.
     """
     if not (row.get("prompt_id") or "").strip():
         return "missing prompt_id"
@@ -129,9 +129,9 @@ def load_prompts_from_csv(
     """Load prompts from CSV with optional filtering.
 
     task_mode:
-      - "normal": use task_XX columns
-      - "hard":   use task_hard_XX columns
-      - "all":    emit both variants; IDs become bgr_01__normal / bgr_01__hard
+      - "normal": use the task_<lang> columns (the default task)
+      - "all":    emit every registered task as its own variant; IDs become
+                  e.g. bgr_01__normal
 
     Rows missing a required field (prompt_id, or_category, or any text) are
     skipped with a warning on stderr; missing optional columns are tolerated.
