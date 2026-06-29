@@ -15,7 +15,6 @@ Across four models in the 4–8B range (Llama 3.1, Gemma 4 E4B, Qwen 3, Apertus 
 ├── data/                      # Input CSVs (canonical schema — see data/INPUT_FORMAT.md)
 │   ├── orbench_<topic>200.csv     # 200 prompts per OR-Bench category (fr/de/it/en)
 │   ├── bger_sample.csv            # 20 real Swiss Federal Tribunal cases
-│   ├── US_sample.csv              # 10 documents from the public "Epstein Files" set
 │   ├── sample_TF.csv              # blank template the Federal Tribunal fills in
 │   └── INPUT_FORMAT.md            # the input contract (required/optional columns)
 ├── over_refusal/              # Core pipeline
