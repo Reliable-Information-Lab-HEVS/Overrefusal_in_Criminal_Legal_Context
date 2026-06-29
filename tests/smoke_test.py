@@ -35,7 +35,7 @@ EXPECTED_COLUMNS = [
     "is_refused", "is_error",
 ]
 
-SAMPLE_CSV = str(PROJECT_ROOT / "data" / "bger_sample.csv")
+SAMPLE_CSV = str(PROJECT_ROOT / "data" / "sample_TF.csv")
 
 _failures = []
 
@@ -99,7 +99,11 @@ def test_run_columns_and_error_contract():
     runner = EvaluationRunner()
     results = runner.run(
         ollama_only=True,
-        ollama_models=["llama3.1:8b"],
+        # Use a model name GUARANTEED to be absent so the "[ERROR]" contract is
+        # exercised whether the Ollama server is off (connection refused) or on
+        # (unknown model -> 404). A real installed model would actually answer,
+        # is_error would be False, and this check would fail on a healthy machine.
+        ollama_models=["__smoke_test_absent_model__"],
         languages=["en"],
         prompts_file=SAMPLE_CSV,
         limit=1,

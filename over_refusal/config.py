@@ -57,8 +57,8 @@ DEFAULT_LANGUAGES = ["fr", "de", "it"]
 # -----------------------------------------------------------------------------
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
-# Default prompts CSV (BGer cases with task + text in 4 languages)
-DEFAULT_PROMPTS_FILE = str(PROJECT_ROOT / "data" / "bger_sample.csv")
+# Default prompts CSV: the shipped example template (one documented row).
+DEFAULT_PROMPTS_FILE = str(PROJECT_ROOT / "data" / "sample_TF.csv")
 
 # Default folder where run results are written
 DEFAULT_RESULTS_DIR = str(PROJECT_ROOT / "results")
