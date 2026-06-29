@@ -6,9 +6,8 @@ Live backends:
   * ClaudeClient            -- Anthropic Messages API (judge backend)
   * GeminiClient            -- Google Gemini API (judge backend)
 
-The retired per-vendor clients live in ``clients/legacy/`` and are not imported
-here. Which models/judges are actually used is resolved from ``models.yaml`` via
-the registry helpers below.
+Which models/judges are actually used is resolved from ``models.yaml`` via the
+registry helpers below.
 """
 
 from .base import BaseClient

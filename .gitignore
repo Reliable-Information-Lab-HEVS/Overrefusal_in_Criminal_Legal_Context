@@ -3,3 +3,4 @@ __pycache__/
 *.pyc
 set_dummy_keys.sh
 .env
+results/

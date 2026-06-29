@@ -9,7 +9,7 @@ separate Python classes.
 
 This collapses the former per-vendor clients (OpenAIClient / MistralClient /
 ApertusClient), which were byte-for-byte the same request except for those few
-fields. The retired files are kept under ``clients/legacy/`` for provenance.
+fields.
 
 Behavior contract (unchanged from the original per-vendor clients):
   * temperature is always 0.0;
