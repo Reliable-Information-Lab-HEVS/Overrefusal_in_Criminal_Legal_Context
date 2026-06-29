@@ -50,7 +50,7 @@ class GeminiClient(BaseClient):
         # Do NOT raise here if the key is missing: EvaluationRunner instantiates
         # every client up front, so raising would crash runs that never touch
         # Gemini (e.g. --ollama-only). Defer the check to query(), like the
-        # other API clients (Claude/OpenAI/Mistral/Apertus).
+        # other API clients (Claude, OpenAI-compatible).
         self.api_key = api_key or os.environ.get("GEMINI_API_KEY")
         self.timeout = timeout
 
