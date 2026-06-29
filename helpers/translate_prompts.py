@@ -1,4 +1,31 @@
+#!/usr/bin/env python3
+"""Translate the <family>_<lang> columns of a prompt CSV via the DeepL API.
 
+Generic CSV translator for the canonical input schema (see
+data/INPUT_FORMAT.md). It auto-detects every translatable column family in the
+header -- any column named ``<family>_<lang>`` with a supported language code
+(fr/de/it/en) -- so ``text_*``, ``task01_*``, ``task02_*`` ... are all handled
+without editing this file.
+
+For each row, the source language is read from the ``orginal_language`` column
+(or forced with ``--source-lang``); every non-empty source cell is translated
+into the requested target languages, skipping cells that are already filled (so
+the run is resumable). The CSV is rewritten in place after each batch.
+
+Usage:
+    # fill the DE/IT/EN cells of one file from its FR cells
+    python helpers/translate_prompts.py --files data/tf_cases.csv --langs de it en
+
+    # force the source language when the CSV has no orginal_language column
+    python helpers/translate_prompts.py --files data/tf_cases.csv \
+        --source-lang fr --langs de it en
+
+    # see what would be translated without calling the API
+    python helpers/translate_prompts.py --files data/tf_cases.csv --langs de it en --dry-run
+
+Set DEEPL_API_KEY in your environment or a .env file (one or more keys,
+comma-separated; free keys end with ':fx'), or pass --keys.
+"""
 
 from __future__ import annotations
 
@@ -11,30 +38,24 @@ from pathlib import Path
 
 import requests
 
-# Load .env
-try:
-    from dotenv import load_dotenv  # type: ignore
 
-    load_dotenv(Path(__file__).resolve().parent / ".env")
-except ImportError:
-    pass
+def _load_env() -> None:
+    """Load a .env if python-dotenv is available, searching upward from the cwd
+    so it works regardless of where this script sits in the tree."""
+    try:
+        from dotenv import find_dotenv, load_dotenv  # type: ignore
+    except ImportError:
+        return
+    path = find_dotenv(usecwd=True)
+    if path:
+        load_dotenv(path)
 
 
-PROJECT_ROOT = Path(__file__).resolve().parent
+_load_env()
 
-# The five category files with the shortest name (one per OR-Bench category).
-DEFAULT_FILES = [
-    PROJECT_ROOT / "data" / "orbench_harmful200.csv",
-    PROJECT_ROOT / "data" / "orbench_illegal200.csv",
-    PROJECT_ROOT / "data" / "orbench_sexual200.csv",
-    PROJECT_ROOT / "data" / "orbench_unethical200.csv",
-    PROJECT_ROOT / "data" / "orbench_violence200.csv",
-]
 
-# Column families translated when their source cell holds text.
-FIELD_FAMILIES = ["text", "task", "task_hard"]
-
-# All languages we keep columns for.
+# Supported language codes. Keep in sync with the pipeline
+# (over_refusal/config.py SUPPORTED_LANGUAGES).
 ALL_LANGS = ["fr", "de", "it", "en"]
 
 # DeepL needs a regional variant for English as a *target* language.
@@ -44,8 +65,7 @@ DEEPL_SOURCE = {"fr": "FR", "de": "DE", "it": "IT", "en": "EN"}
 # DeepL allows up to 50 texts per request; stay a bit under.
 BATCH_SIZE = 40
 
-
-# Placeholders from .env.example that must never be treated as real keys.
+# Placeholders that must never be treated as real keys.
 _PLACEHOLDER_KEYS = {"key1", "key2", "key1:fx", "your-deepl-key-here"}
 
 
@@ -63,14 +83,30 @@ def endpoint_for_key(key: str) -> str:
     )
 
 
+def discover_families(fieldnames: list[str], langs: list[str]) -> list[str]:
+    """Infer translatable column families from the header.
+
+    A *family* is any prefix ``P`` such that a column ``P_<lang>`` exists for at
+    least one ``lang`` in ``langs``. This keeps the tool schema-agnostic:
+    ``text_*``, ``task01_*``, ``task02_*`` ... are discovered automatically,
+    with no hard-coded column list to keep in sync.
+    """
+    suffixes = {f"_{l}": len(l) + 1 for l in langs}
+    families: set[str] = set()
+    for col in fieldnames:
+        for suf, n in suffixes.items():
+            if col.endswith(suf):
+                families.add(col[:-n])
+                break
+    return sorted(families)
+
+
 class DeepLClient:
     """Thin DeepL wrapper with batch translation and key rotation."""
 
     def __init__(self, keys: list[str]):
         cleaned = [sanitize_key(k) for k in keys]
-        self.keys = [
-            k for k in cleaned if k and k.lower() not in _PLACEHOLDER_KEYS
-        ]
+        self.keys = [k for k in cleaned if k and k.lower() not in _PLACEHOLDER_KEYS]
         if not self.keys:
             raise ValueError(
                 "No usable DeepL API key. Set DEEPL_API_KEY in .env or pass --keys."
@@ -123,13 +159,15 @@ class DeepLClient:
                 time.sleep(wait)
                 continue
 
-            raise RuntimeError(
-                f"DeepL error HTTP {resp.status_code}: {resp.text[:300]}"
-            )
+            raise RuntimeError(f"DeepL error HTTP {resp.status_code}: {resp.text[:300]}")
 
 
 def translate_file(
-    path: Path, client: DeepLClient | None, langs: list[str], dry_run: bool
+    path: Path,
+    client: DeepLClient | None,
+    langs: list[str],
+    dry_run: bool,
+    source_lang: str | None = None,
 ) -> None:
     if not path.exists():
         print(f"[skip] {path.name}: file not found")
@@ -140,40 +178,43 @@ def translate_file(
         fieldnames = reader.fieldnames or []
         rows = list(reader)
 
+    families = discover_families(fieldnames, ALL_LANGS)
+    if not families:
+        print(f"[skip] {path.name}: no <family>_<lang> columns to translate")
+        return
+
     # Collect every cell that needs translating, grouped by (source, target)
     # so identical strings in the same pair are sent once (cached).
     # jobs[(src, tgt)] = { source_text: [(row_index, target_col), ...] }
     jobs: dict[tuple[str, str], dict[str, list[tuple[int, str]]]] = {}
 
     for i, row in enumerate(rows):
-        src_lang = (row.get("orginal_language") or "").strip().lower()
-        if src_lang not in ALL_LANGS:
+        src = source_lang or (row.get("orginal_language") or "").strip().lower()
+        if src not in ALL_LANGS:
             continue
-        for family in FIELD_FAMILIES:
-            src_col = f"{family}_{src_lang}"
+        for family in families:
+            src_col = f"{family}_{src}"
             if src_col not in fieldnames:
                 continue
             src_text = (row.get(src_col) or "").strip()
             if not src_text:
                 continue
             for tgt in langs:
-                if tgt == src_lang:
+                if tgt == src:
                     continue
                 tgt_col = f"{family}_{tgt}"
                 if tgt_col not in fieldnames:
                     continue
                 if (row.get(tgt_col) or "").strip():
                     continue  # already translated -> resumable
-                jobs.setdefault((src_lang, tgt), {}).setdefault(src_text, []).append(
+                jobs.setdefault((src, tgt), {}).setdefault(src_text, []).append(
                     (i, tgt_col)
                 )
 
-    total_cells = sum(
-        len(targets) for pair in jobs.values() for targets in pair.values()
-    )
+    total_cells = sum(len(t) for pair in jobs.values() for t in pair.values())
     total_calls = sum(len(pair) for pair in jobs.values())
     print(
-        f"[{path.name}] {total_cells} cells to fill "
+        f"[{path.name}] families={families} -> {total_cells} cells to fill "
         f"({total_calls} unique strings) across {len(jobs)} language pairs"
     )
 
@@ -182,18 +223,17 @@ def translate_file(
 
     assert client is not None
     done = 0
-    for (src_lang, tgt), text_map in jobs.items():
+    for (src, tgt), text_map in jobs.items():
         uniques = list(text_map.keys())
         for start in range(0, len(uniques), BATCH_SIZE):
             batch = uniques[start : start + BATCH_SIZE]
-            translations = client.translate(batch, src_lang, tgt)
+            translations = client.translate(batch, src, tgt)
             for src_text, translated in zip(batch, translations):
                 for row_idx, col in text_map[src_text]:
                     rows[row_idx][col] = translated
                     done += 1
-
             _write_csv(path, fieldnames, rows)
-            print(f"  {src_lang}->{tgt}: {done}/{total_cells} cells written")
+            print(f"  {src}->{tgt}: {done}/{total_cells} cells written")
 
     print(f"[{path.name}] done.")
 
@@ -208,20 +248,29 @@ def _write_csv(path: Path, fieldnames: list[str], rows: list[dict]) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Translate prompt CSVs via DeepL.")
+    parser = argparse.ArgumentParser(
+        description="Translate the <family>_<lang> columns of prompt CSV(s) via DeepL."
+    )
     parser.add_argument(
         "--files",
         nargs="+",
         type=Path,
-        default=DEFAULT_FILES,
-        help="CSV files to translate (default: the five orbench *200.csv files).",
+        required=True,
+        help="CSV file(s) to translate (canonical schema, see data/INPUT_FORMAT.md).",
     )
     parser.add_argument(
         "--langs",
         nargs="+",
-        default=["fr", "de", "it"],
+        default=["fr", "de", "it", "en"],
         choices=ALL_LANGS,
-        help="Target languages (default: fr de it).",
+        help="Target languages to fill (default: fr de it en).",
+    )
+    parser.add_argument(
+        "--source-lang",
+        default=None,
+        choices=ALL_LANGS,
+        help="Force the source language for every row (overrides the "
+             "orginal_language column; useful when that column is absent).",
     )
     parser.add_argument(
         "--keys",
@@ -248,7 +297,7 @@ def main() -> int:
         print(f"Using {len(client.keys)} DeepL key(s).")
 
     for path in args.files:
-        translate_file(Path(path), client, args.langs, args.dry_run)
+        translate_file(Path(path), client, args.langs, args.dry_run, args.source_lang)
 
     return 0
 
