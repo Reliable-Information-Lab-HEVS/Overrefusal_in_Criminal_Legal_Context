@@ -5,10 +5,6 @@ Pipeline for one prompt:
   2. Send it to each model (Ollama + APIs as configured).
   3. Detect a refusal with keyword matching (RefusalDetector).
   4. Save the response and a refusal flag to a CSV row.
-
-The LLM-as-judge step (3-class classification) is a separate script,
-see judge.py. We keep keyword matching here for speed; judge.py is run
-afterwards on the produced CSV.
 """
 
 import argparse

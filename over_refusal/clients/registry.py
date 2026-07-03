@@ -1,15 +1,12 @@
-"""Model & judge registry: reads ``models.yaml`` and builds backend clients.
+"""Model registry: reads ``models.yaml`` and builds backend clients.
 
-This is the single place where "which models do we test" and "which judges
-vote" are resolved. Both come from ``models.yaml`` at the project root, so the
-Federal Tribunal can add a model or change the judge ensemble by editing one
-YAML file -- no Python edits.
+This is the single place where "which models do we test" is resolved. The list
+comes from ``models.yaml`` at the project root, so the Federal Tribunal can add
+a model by editing one YAML file -- no Python edits.
 
 Backend types:
   * ``ollama``             -> OllamaClient (local server, no key)
   * ``openai_compatible``  -> OpenAICompatibleClient (any OpenAI-style HTTP API)
-  * ``anthropic``          -> ClaudeClient   (judge backend; bespoke wire format)
-  * ``gemini``             -> GeminiClient   (judge backend; bespoke wire format)
 """
 
 from dataclasses import dataclass
@@ -19,8 +16,6 @@ from typing import Dict, List, Optional
 from over_refusal.config import DEFAULT_OLLAMA_TIMEOUT, OLLAMA_URL, PROJECT_ROOT
 
 from .base import BaseClient
-from .claude import ClaudeClient
-from .gemini import GeminiClient
 from .ollama import OllamaClient
 from .openai_compatible import OpenAICompatibleClient
 
@@ -38,8 +33,6 @@ DEFAULT_MODELS_FILE = PROJECT_ROOT / "models.yaml"
 # Backend type labels (also written verbatim to the CSV "backend" column).
 OLLAMA = "ollama"
 OPENAI_COMPATIBLE = "openai_compatible"
-ANTHROPIC = "anthropic"
-GEMINI = "gemini"
 
 
 @dataclass
@@ -47,14 +40,6 @@ class ModelSpec:
     """A model under test: what to call it, how to reach it, and its client."""
     name: str          # CSV "model" value + model id sent to the API
     backend: str       # CSV "backend" value (the backend type label)
-    client: BaseClient
-
-
-@dataclass
-class JudgeSpec:
-    """One member of the LLM-as-judge ensemble."""
-    name: str          # short judge id (e.g. "gpt", "claude", "gemini")
-    model: str         # model id passed to the client
     client: BaseClient
 
 
@@ -94,17 +79,9 @@ def build_client(entry: Dict) -> BaseClient:
             retry=entry.get("retry"),
         )
 
-    # Bespoke judge backends (kept verbatim to preserve OR-Bench methodology).
-    # They read their own key from the environment (ANTHROPIC_API_KEY /
-    # GEMINI_API_KEY), so api_key_env in the YAML is documentation only.
-    if backend == ANTHROPIC:
-        return ClaudeClient()
-    if backend == GEMINI:
-        return GeminiClient()
-
     raise ValueError(
         f"Unknown backend '{backend}' in model config. Supported: "
-        f"{OLLAMA}, {OPENAI_COMPATIBLE}, {ANTHROPIC}, {GEMINI}"
+        f"{OLLAMA}, {OPENAI_COMPATIBLE}"
     )
 
 
@@ -149,37 +126,3 @@ def resolve_models(
     if not ollama_only:
         result.extend(api_specs)
     return result
-
-
-def load_judge_names(models_file: Optional[str] = None) -> List[str]:
-    """Return the judge ids declared in models.yaml, in file order."""
-    data = _read_yaml(models_file)
-    return [j["name"] for j in (data.get("judges", []) or [])]
-
-
-def resolve_judges(
-    judge_names: Optional[List[str]] = None,
-    models_file: Optional[str] = None,
-) -> List[JudgeSpec]:
-    """Build the judge ensemble from models.yaml.
-
-    ``judge_names`` selects a subset (in the given order); None means all
-    judges declared in the file.
-    """
-    data = _read_yaml(models_file)
-    declared = {j["name"]: j for j in (data.get("judges", []) or [])}
-    if not declared:
-        raise ValueError("No judges declared in models.yaml (need a `judges:` list).")
-
-    if judge_names is None:
-        judge_names = list(declared.keys())
-
-    out: List[JudgeSpec] = []
-    for name in judge_names:
-        if name not in declared:
-            raise ValueError(
-                f"Unknown judge '{name}'. Available: {list(declared)}"
-            )
-        entry = declared[name]
-        out.append(JudgeSpec(name=name, model=entry["model"], client=build_client(entry)))
-    return out

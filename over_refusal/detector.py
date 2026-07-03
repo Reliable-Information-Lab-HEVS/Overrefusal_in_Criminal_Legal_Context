@@ -2,7 +2,6 @@
 
 Loads refusal keywords from `data/refusal_keywords.json`.
 This is the fast first-pass check from OR-Bench (Cui et al., 2025).
-For ambiguous or partial refusals, the LLM-as-judge in `judge.py` is used.
 """
 
 import json

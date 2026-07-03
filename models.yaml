@@ -66,34 +66,3 @@ models:
   # ---- TEMPLATE: another local Ollama model --------------------------------
   # - name: "mistral:7b"
   #   backend: ollama
-
-
-# =============================================================================
-# judges  --  the LLM-as-judge ensemble (OR-Bench 3-class majority vote).
-# =============================================================================
-# Used only by judge.py (run after a benchmark to classify the saved responses).
-# The paper uses a heterogeneous 3-judge ensemble. Edit the model ids here to
-# change which judges vote; keep an odd number to avoid ties.
-#
-# Judge backends may additionally be:
-#   anthropic   Anthropic Messages API (content-block parsing; key: ANTHROPIC_API_KEY)
-#   gemini      Google Gemini API with safety filters disabled and server-side
-#               blocks recorded as refusals (key: GEMINI_API_KEY)
-# These two are kept as dedicated backends because their wire format and
-# refusal semantics differ from OpenAI's and are relied on by the methodology.
-# =============================================================================
-
-judges:
-  - name: gpt
-    backend: openai_compatible
-    model: "gpt-4.1"
-    base_url: "https://api.openai.com/v1/chat/completions"
-    api_key_env: OPENAI_API_KEY
-  - name: claude
-    backend: anthropic
-    model: "claude-sonnet-4-20250514"
-    api_key_env: ANTHROPIC_API_KEY
-  - name: gemini
-    backend: gemini
-    model: "gemini-2.5-flash"
-    api_key_env: GEMINI_API_KEY
