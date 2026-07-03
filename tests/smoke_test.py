@@ -28,7 +28,7 @@ from over_refusal.prompts import TASK_REGISTRY, get_all_prompts
 
 # The exact columns every result row must carry (the saved CSV header).
 EXPECTED_COLUMNS = [
-    "prompt_id", "domain", "category", "task_variant", "lang",
+    "prompt_id", "category", "task_variant", "lang",
     "model", "backend", "prompt", "response_preview", "response_full",
     "is_refused", "is_error",
 ]

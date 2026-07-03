@@ -135,7 +135,6 @@ class EvaluationRunner:
         for prompt_id, prompt_data in prompts.items():
             category = prompt_data["category"]
             task_variant = prompt_data.get("task_variant", "task01")
-            domain = "BGR/legal" if prompt_id.startswith("bgr") else "general"
 
             for language in languages:
                 # Fall back to English text if the language is missing for this prompt
@@ -170,7 +169,6 @@ class EvaluationRunner:
 
                     results.append({
                         "prompt_id": prompt_id,
-                        "domain": domain,
                         "category": category,
                         "task_variant": task_variant,
                         "lang": language,
@@ -283,6 +281,9 @@ def main() -> None:
 
     output_path = _resolve_output_path(args.output)
     filename = saver.save_csv(results, output_path)
-    printer.print_summary(results)
+
+    # Persist the summary next to the results CSV: <run>.csv -> <run>_summary.txt
+    summary_file = str(Path(filename).with_suffix("")) + "_summary.txt"
+    printer.print_summary(results, summary_file=summary_file)
 
     print(f"\nDone! Full results in: {filename}")
