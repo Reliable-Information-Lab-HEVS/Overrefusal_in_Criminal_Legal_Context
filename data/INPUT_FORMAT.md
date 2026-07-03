@@ -20,9 +20,8 @@ one thing to get right:
   (a role, a system prompt) also goes here: if your workflow sends a system
   prompt and a user prompt, concatenate them into `task01_<lang>`.
 
-For example, the production prompt of the Federal Tribunal's summarization
-workflow (system prompt and user prompt concatenated) goes into the task
-columns exactly as used in the real workflow:
+For example, a production summarization prompt (system prompt and user prompt
+concatenated) goes into the task columns exactly as used in a real workflow:
 
 - `task01_fr`: `Vous êtes un résumeur expert. Merci de retourner uniquement le texte résumé et rien d'autre. Veuillez résumer :`
 - `task01_de`: `Sie sind ein Resumee-Experte. Bitte senden Sie nur den zusammengefassten Text und nichts anderes zurück. Bitte zusammenfassen`
@@ -43,7 +42,7 @@ columns exactly as used in the real workflow:
 | `bger_url` | optional | Provenance URL. | *(empty)* |
 | `orginal_language` | optional | Source language, informational only (column name keeps its historical spelling). | `fr` |
 
-**Tolerant loader.** Missing *optional* columns are fine; the Federal Tribunal
+**Tolerant loader.** Missing *optional* columns are fine; you
 will often supply only one or two languages. A row missing a *required* field
 (`prompt_id`, `category`, or any text) is **skipped with a warning**, not
 silently turned into an empty prompt.
@@ -55,7 +54,7 @@ family selected by `--task-mode`. There is currently one: `task01` (columns
 `task03_<lang>` columns to your CSV. It then appears automatically as a valid
 `--task-mode task03` (and is included by `--task-mode all`).
 
-## How the Federal Tribunal adds its own cases
+## How to add your own cases
 
 1. Copy the template: `cp data/sample_TF.csv data/tf_cases.csv`.
 2. Fill one row per case: `prompt_id`, `category`, the case text in **at least
