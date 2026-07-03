@@ -19,8 +19,8 @@ Column contract (see data/INPUT_FORMAT.md for the full table):
              bger_source/_url    provenance metadata
              orginal_language    informational only
 
-Authority/role framing is NOT a column: it is injected at run time with
---prefix (see prefixes.py / roles.yaml).
+Any framing (role, instructions) belongs in the task01_<lang> columns,
+together with the task instruction.
 
 The loader is tolerant: missing optional columns are fine (the Tribunal will
 often supply only one or two languages and no task instruction), and a row
@@ -43,7 +43,7 @@ from over_refusal.config import DEFAULT_PROMPTS_FILE, SUPPORTED_LANGUAGES
 
 
 # --- Task registry ------------------------------------------------------------
-# A "task" is one column family in the CSV: task name -> CSV column prefix.
+# A "task" is one column family in the CSV: task name -> CSV column stem.
 # Tasks are numbered task01, task02, … This is the SINGLE place they are
 # declared. To add task03 (and beyond):
 #   1. add one entry here, e.g.  "task03": "task03"
@@ -65,7 +65,7 @@ TASK_MODES = tuple(TASK_REGISTRY) + ("all",)
 REQUIRED_COLUMNS = ("prompt_id", "category")
 TEXT_COLUMNS = tuple(f"text_{lang}" for lang in SUPPORTED_LANGUAGES)
 OPTIONAL_COLUMNS = (
-    tuple(f"{prefix}_{lang}" for prefix in TASK_REGISTRY.values()
+    tuple(f"{stem}_{lang}" for stem in TASK_REGISTRY.values()
           for lang in SUPPORTED_LANGUAGES)
     + ("bger_source", "bger_url", "orginal_language")
 )
@@ -86,10 +86,10 @@ def _make_entry(row: dict, task_name: str) -> dict:
     """Turn one CSV row into a prompt entry dict, for a given registered task.
 
     ``task_name`` is a key of TASK_REGISTRY (e.g. "task01"); its CSV column
-    prefix is looked up there. ``task_variant`` records the task name, which is
+    stem is looked up there. ``task_variant`` records the task name, which is
     what the results CSV stores.
     """
-    col_prefix = TASK_REGISTRY[task_name]
+    col_stem = TASK_REGISTRY[task_name]
     entry = {
         "category": row.get("category", "").strip(),
         "source": row.get("bger_source", "").strip(),
@@ -97,7 +97,7 @@ def _make_entry(row: dict, task_name: str) -> dict:
         "task_variant": task_name,
     }
     for lang in SUPPORTED_LANGUAGES:
-        task = row.get(f"{col_prefix}_{lang}", "")
+        task = row.get(f"{col_stem}_{lang}", "")
         text = row.get(f"text_{lang}", "")
         entry[lang] = _build_prompt_text(task, text)
     return entry

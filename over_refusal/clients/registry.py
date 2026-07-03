@@ -23,7 +23,7 @@ try:
     import yaml
 except ImportError as exc:  # pragma: no cover - environment guard
     raise ImportError(
-        "PyYAML is required to read models.yaml / roles.yaml. "
+        "PyYAML is required to read models.yaml. "
         "Install it with:  pip install pyyaml   (or: pip install -r requirements.txt)"
     ) from exc
 

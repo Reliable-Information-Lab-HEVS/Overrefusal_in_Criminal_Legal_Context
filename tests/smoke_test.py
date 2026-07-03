@@ -6,7 +6,6 @@ that the refactor must NOT change:
   * the exact set of CSV columns produced by a run,
   * the "[ERROR] ..." backend-error contract (returned, never raised),
   * the keyword refusal detector (opening-window + EN fallback),
-  * the apply_prefix ValueError guard (no silent language fallback),
   * prompt loading for the task01 / all task modes.
 
 Usage:
@@ -24,13 +23,12 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from over_refusal.detector import RefusalDetector
 from over_refusal.evaluation import EvaluationRunner
-from over_refusal.prefixes import apply_prefix
 from over_refusal.prompts import TASK_REGISTRY, get_all_prompts
 
 
 # The exact columns every result row must carry (the saved CSV header).
 EXPECTED_COLUMNS = [
-    "prompt_id", "domain", "category", "task_variant", "prefix", "lang",
+    "prompt_id", "domain", "category", "task_variant", "lang",
     "model", "backend", "prompt", "response_preview", "response_full",
     "is_refused", "is_error",
 ]
@@ -62,25 +60,6 @@ def test_detector():
     check("EN fallback under FR", d.is_refusal("I cannot assist with this request.", "fr"))
 
 
-def test_prefix_guard():
-    print("prefixes:")
-    out = apply_prefix("BODY", "supreme-court", "fr")
-    check("prefix prepended", out.endswith("BODY") and out != "BODY")
-    check("none is passthrough", apply_prefix("BODY", "none", "fr") == "BODY")
-    # Unknown condition must raise
-    try:
-        apply_prefix("BODY", "does-not-exist", "fr")
-        check("unknown condition raises", False, "no ValueError raised")
-    except ValueError:
-        check("unknown condition raises", True)
-    # No silent language fallback: a condition without a wording for the lang raises
-    try:
-        apply_prefix("BODY", "supreme-court", "es")
-        check("missing language raises", False, "no ValueError raised")
-    except ValueError:
-        check("missing language raises", True)
-
-
 def test_prompts_loading():
     print("prompts:")
     single = get_all_prompts(csv_path=SAMPLE_CSV, limit=2, task_mode="task01")
@@ -108,7 +87,6 @@ def test_run_columns_and_error_contract():
         prompts_file=SAMPLE_CSV,
         limit=1,
         task_mode="task01",
-        prefix="none",
     )
     check("produced at least one result", len(results) > 0)
     if results:
@@ -122,7 +100,7 @@ def test_run_columns_and_error_contract():
 
 def main():
     print("\n=== OVER-REFUSAL SMOKE TEST (offline) ===\n")
-    for fn in (test_detector, test_prefix_guard, test_prompts_loading,
+    for fn in (test_detector, test_prompts_loading,
                test_run_columns_and_error_contract):
         try:
             fn()
