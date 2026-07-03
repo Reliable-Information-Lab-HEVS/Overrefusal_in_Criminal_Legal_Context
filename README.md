@@ -70,7 +70,7 @@ The repository ships ready-to-run prompt sets:
 - `data/sample_TF.csv`: one fictional template row plus three real Federal
   Tribunal rulings. Takes a few minutes to run.
 - `data/bger_sample.csv`: 20 real Federal Tribunal rulings, in four languages.
-  Takes about 20 to 30 minutes.
+  Takes from an hour to a day depending on languages and hardware.
 - `data/orbench_refused.csv`: synthetic prompts, not real cases, close to
   sensitive themes, that at least three of the four models we tested refused
   at least once. Usable as a refusal benchmark: run them through a model and
