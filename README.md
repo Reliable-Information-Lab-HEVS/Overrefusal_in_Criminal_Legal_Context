@@ -55,6 +55,8 @@ Append one entry to `models.yaml`, no code change needed. A local Ollama model:
 Or an internal OpenAI-compatible endpoint:
 
 ```yaml
+# Template values: replace name, base_url and api_key_env with the values
+# of your own endpoint.
 - name: "tf-internal-llm"
   backend: openai_compatible
   base_url: "https://llm.internal.example/v1/chat/completions"
@@ -66,13 +68,14 @@ Or an internal OpenAI-compatible endpoint:
 The repository ships ready-to-run prompt sets:
 
 - `data/sample_TF.csv`: one fictional template row plus three real Federal
-  Tribunal rulings. A few minutes to run.
+  Tribunal rulings. Takes a few minutes to run.
 - `data/bger_sample.csv`: 20 real Federal Tribunal rulings, in four languages.
-  About 20 to 30 minutes.
+  Takes about 20 to 30 minutes.
 - `data/orbench_refused.csv`: synthetic prompts, not real cases, close to
   sensitive themes, that at least three of the four models we tested refused
   at least once. Usable as a refusal benchmark: run them through a model and
-  count refusals. From an hour to a day depending on languages and hardware.
+  count refusals. Takes from an hour to a day depending on languages and
+  hardware.
 
 For a quick first try, limit the run to three prompts and one language:
 
@@ -108,6 +111,12 @@ See `data/INPUT_FORMAT.md` for the column format. Then run:
 python run.py --prompts-file data/tf_cases.csv --ollama-only --languages fr de
 ```
 
+The main options: `--prompts-file` points to your CSV, `--ollama-models`
+restricts the run to the models you name (default: every model in
+`models.yaml`), `--limit N` runs only the first N rows (useful for a quick
+check), and `--languages` picks the languages to test (default: fr de it).
+Run `python run.py --help` for the full list.
+
 ## Results
 
 Each run writes one CSV under `results/` (created on the first run), with one
@@ -125,6 +134,7 @@ on request.
 This tool was built by François Brouchoud as the artifact of a Master's thesis
 at HES-SO Valais, supervised by Dimitri Percia David and Anastasiia Kucherenko,
 and carried out with the Federal Tribunal.
+Contact: francois.brouchoud@hevs.ch
 
 Feedback is very welcome: run the tool on your own cases and tell us where it
 helped, where it got in the way, and what your team would need to use it on
