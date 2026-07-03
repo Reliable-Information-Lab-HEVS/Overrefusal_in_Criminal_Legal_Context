@@ -48,5 +48,5 @@ models:
   # in-house model: a URL and the name of the env var holding its key.
   # - name: "tf-internal-llm"
   #   backend: openai_compatible
-  #   base_url: "https://llm.intern.bger.admin.ch/v1/chat/completions"
+  #   base_url: "https://llm.internal.example/v1/chat/completions"
   #   api_key_env: TF_LLM_API_KEY
