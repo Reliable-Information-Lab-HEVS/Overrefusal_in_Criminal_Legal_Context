@@ -21,6 +21,7 @@ from over_refusal.config import (
     SUPPORTED_LANGUAGES,
 )
 from over_refusal.detector import RefusalDetector
+from over_refusal.prefixes import PREFIX_CHOICES, apply_prefix
 from over_refusal.prompts import TASK_MODES, get_all_prompts
 from over_refusal.reporting import SummaryPrinter
 from over_refusal.storage import ResultSaver
@@ -71,6 +72,7 @@ class EvaluationRunner:
         prompt_ids: Optional[List[str]] = None,
         limit: Optional[int] = None,
         task_mode: str = "task01",
+        prefix: str = "none",
         models_file: Optional[str] = None,
     ) -> List[Dict]:
         """Run the evaluation and return the list of result dicts."""
@@ -123,6 +125,7 @@ class EvaluationRunner:
             f"{len(models)} models = {total} tests"
         )
         print(f"  Task mode: {task_mode}")
+        print(f"  Prefix condition: {prefix}")
         if categories:
             print(f"  Categories filter: {categories}")
         if prompt_ids:
@@ -142,6 +145,9 @@ class EvaluationRunner:
                 if not prompt_text:
                     print(f"[skip] {prompt_id} has no text for language '{language}'")
                     continue
+
+                # Inject the authority/role prefix at run time (if any).
+                prompt_text = apply_prefix(prompt_text, prefix, language)
 
                 for spec in models:
                     backend = spec.backend
@@ -171,6 +177,7 @@ class EvaluationRunner:
                         "prompt_id": prompt_id,
                         "category": category,
                         "task_variant": task_variant,
+                        "condition": prefix,
                         "lang": language,
                         "model": model_name,
                         "backend": backend,
@@ -243,6 +250,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
                         help="Which registered task to use (default: task01); "
                              "'all' emits every registered task as its own variant")
 
+    # --- Prefix condition (injected at run time) ---
+    parser.add_argument("--prefix", choices=PREFIX_CHOICES, default="none",
+                        help="Prefix condition prepended verbatim to every prompt "
+                             "(per language). Default: none (baseline).")
+
     # --- Shortcut & output ---
     parser.add_argument("--quick", action="store_true",
                         help="Quick test: 3 prompts, English only")
@@ -276,6 +288,7 @@ def main() -> None:
         prompt_ids=args.prompt_ids,
         limit=limit,
         task_mode=args.task_mode,
+        prefix=args.prefix,
         models_file=args.models_file,
     )
 

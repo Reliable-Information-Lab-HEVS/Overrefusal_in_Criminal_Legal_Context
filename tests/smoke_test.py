@@ -23,12 +23,13 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from over_refusal.detector import RefusalDetector
 from over_refusal.evaluation import EvaluationRunner
+from over_refusal.prefixes import apply_prefix
 from over_refusal.prompts import TASK_REGISTRY, get_all_prompts
 
 
 # The exact columns every result row must carry (the saved CSV header).
 EXPECTED_COLUMNS = [
-    "prompt_id", "category", "task_variant", "lang",
+    "prompt_id", "category", "task_variant", "condition", "lang",
     "model", "backend", "prompt", "response_preview", "response_full",
     "is_refused", "is_error",
 ]
@@ -58,6 +59,26 @@ def test_detector():
     check("empty response", not d.is_refusal("", "en"))
     # English fallback even when lang is FR
     check("EN fallback under FR", d.is_refusal("I cannot assist with this request.", "fr"))
+
+
+def test_prefix_guard():
+    print("prefixes:")
+    out = apply_prefix("BODY", "supreme-court", "en")
+    check("prefix prepended verbatim (no separator added)",
+          out.endswith(": BODY") and out != "BODY")
+    check("none is passthrough", apply_prefix("BODY", "none", "en") == "BODY")
+    # Unknown condition must raise
+    try:
+        apply_prefix("BODY", "does-not-exist", "en")
+        check("unknown condition raises", False, "no ValueError raised")
+    except ValueError:
+        check("unknown condition raises", True)
+    # No silent language fallback: a condition without a wording for the lang raises
+    try:
+        apply_prefix("BODY", "supreme-court", "fr")
+        check("missing language raises", False, "no ValueError raised")
+    except ValueError:
+        check("missing language raises", True)
 
 
 def test_prompts_loading():
@@ -100,7 +121,7 @@ def test_run_columns_and_error_contract():
 
 def main():
     print("\n=== OVER-REFUSAL SMOKE TEST (offline) ===\n")
-    for fn in (test_detector, test_prompts_loading,
+    for fn in (test_detector, test_prefix_guard, test_prompts_loading,
                test_run_columns_and_error_contract):
         try:
             fn()
