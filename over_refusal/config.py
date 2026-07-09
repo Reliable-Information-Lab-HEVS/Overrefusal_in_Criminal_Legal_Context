@@ -30,7 +30,7 @@ _try_load_dotenv()
 # Local Ollama server (no key needed)
 # -----------------------------------------------------------------------------
 OLLAMA_URL = "http://localhost:11434/api/generate"
-DEFAULT_OLLAMA_TIMEOUT = 120
+DEFAULT_OLLAMA_TIMEOUT = 200
 
 # NOTE: the list of models to evaluate lives in the user-editable
 # `models.yaml` at the project root (read via over_refusal.clients.registry).
