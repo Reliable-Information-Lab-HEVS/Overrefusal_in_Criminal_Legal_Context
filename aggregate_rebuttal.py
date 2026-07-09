@@ -20,7 +20,7 @@ from pathlib import Path
 # Priority order used for the runs; unknown conditions are appended at the end.
 CONDITION_ORDER = [
     "none", "supreme-court", "supreme-court-p1", "lawyer", "lawyer-p1",
-    "neutral", "supreme-court-p2", "lawyer-p2",
+    "neutral",
 ]
 
 OUT_FILE = Path("results") / "rebuttal_summary.csv"

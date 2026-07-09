@@ -42,8 +42,6 @@ EXPECTED_CONDITIONS = (
     "lawyer-p1",
     "supreme-court-p1",
     "neutral",
-    "lawyer-p2",
-    "supreme-court-p2",
 )
 
 
