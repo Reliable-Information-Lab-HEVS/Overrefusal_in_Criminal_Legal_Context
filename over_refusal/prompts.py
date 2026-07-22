@@ -51,7 +51,8 @@ from over_refusal.config import DEFAULT_PROMPTS_FILE, SUPPORTED_LANGUAGES
 # Nothing else changes: TASK_MODES, the --task-mode choices, and the "all"
 # behavior all derive from this registry.
 TASK_REGISTRY = {
-    "task01": "task01",      # columns task01_<lang>
+    "task01": "task01",      # columns task01_<lang>  (condition « none » : task neutre)
+    "task02": "task02",      # columns task02_<lang>  (condition « préfixe autorité »)
 }
 
 # Valid task modes: each registered task name, plus "all" (emit every registered
