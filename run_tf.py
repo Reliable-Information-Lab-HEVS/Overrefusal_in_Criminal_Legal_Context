@@ -44,12 +44,25 @@ RESPONSE_PREVIEW_CHARS = 500
 
 
 def load_done(path: Path):
-    """Clés (prompt_id, lang, model) déjà présentes dans le fichier de sortie."""
+    """Clés (prompt_id, lang, model) déjà réussies dans le fichier de sortie.
+
+    Les lignes en erreur ([ERROR] : timeout, modèle absent, …) ne comptent PAS
+    comme faites : elles sont RETENTÉES à la reprise (leçon de la séance 26,
+    faux résultats dus aux read timeouts). Le CSV garde alors l'ancienne ligne
+    erreur + la nouvelle tentative ; à l'analyse, écarter les is_error=True
+    (la dernière tentative par clé fait foi).
+    """
     done = set()
+    errors = 0
     if path.exists():
         with open(path, newline="", encoding="utf-8") as f:
             for r in csv.DictReader(f):
+                if (r.get("is_error") or "").strip() == "True":
+                    errors += 1
+                    continue
                 done.add((r["prompt_id"], r["lang"], r["model"]))
+    if errors:
+        print(f"[i] {errors} ligne(s) en erreur dans {path.name} -> seront retentées.")
     return done
 
 
