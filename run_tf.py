@@ -81,6 +81,8 @@ def main():
     ap.add_argument("--prompt-ids", nargs="+", default=None)
     ap.add_argument("--task-mode", choices=list(TASK_MODES), default="task01")
     ap.add_argument("--sleep", type=float, default=0.0, help="pause entre appels (s)")
+    ap.add_argument("--quiet", action="store_true",
+                    help="n'affiche pas l'aperçu de la réponse (statut seul)")
     args = ap.parse_args()
 
     # 1) modèles depuis models.yaml, en gardant leur client (donc leur base_url).
@@ -166,6 +168,8 @@ def main():
                     fh.flush()  # <-- chaque réponse est sur le disque tout de suite
 
                     print("REFUSED" if refused else ("ERROR" if is_error else "OK"))
+                    if not args.quiet:
+                        print(f"    -> {preview[:300]}")
                     if args.sleep:
                         time.sleep(args.sleep)
 
