@@ -43,8 +43,8 @@ PROMPT_PREVIEW_CHARS = 200
 RESPONSE_PREVIEW_CHARS = 500
 
 
-def load_done(path: Path):
-    """Clés (prompt_id, lang, model) déjà réussies dans le fichier de sortie.
+def load_done(path: Path, retry_empty: int = 2):
+    """Clés (prompt_id, lang, model) considérées comme traitées.
 
     Les lignes en erreur ([ERROR] : timeout, modèle absent, …) ne comptent PAS
     comme faites : elles sont RETENTÉES à la reprise (leçon de la séance 26,
@@ -52,29 +52,40 @@ def load_done(path: Path):
     erreur + la nouvelle tentative ; à l'analyse, écarter les is_error=True
     (la dernière tentative par clé fait foi).
 
-    Les lignes SANS réponse (response_full vide, is_error non renseigné — écriture
-    interrompue) ne comptent pas non plus : sans ce filtre elles sont comptées
-    comme faites et le run annonce « rien à faire » alors qu'il manque des appels.
+    Les RÉPONSES VIDES (HTTP 200 mais champ "response" vide : le modèle n'a rien
+    produit) sont un cas distinct. Ce n'est pas une erreur réseau, et à
+    temperature 0 c'est souvent DÉTERMINISTE : retenter à l'infini ne remplit
+    jamais le trou et le run refait les mêmes N appels à chaque lancement. On
+    retente donc au plus `retry_empty` fois, puis la clé est déclarée épuisée
+    (vide reproductible) et le run peut se terminer.
     """
     csv.field_size_limit(10 ** 8)
-    done = set()
+    ok = set()
+    empty_tries = {}
     errors = 0
-    holes = 0
     if path.exists():
         with open(path, newline="", encoding="utf-8") as f:
             for r in csv.DictReader(f):
+                key = (r["prompt_id"], r["lang"], r["model"])
                 if (r.get("is_error") or "").strip() == "True":
                     errors += 1
                     continue
                 if not (r.get("response_full") or "").strip():
-                    holes += 1
+                    empty_tries[key] = empty_tries.get(key, 0) + 1
                     continue
-                done.add((r["prompt_id"], r["lang"], r["model"]))
+                ok.add(key)
+    exhausted = {k for k, n in empty_tries.items() if k not in ok and n >= retry_empty}
+    pending = {k for k in empty_tries if k not in ok and k not in exhausted}
     if errors:
         print(f"[i] {errors} ligne(s) en erreur dans {path.name} -> seront retentées.")
-    if holes:
-        print(f"[i] {holes} ligne(s) sans réponse dans {path.name} -> seront retentées.")
-    return done
+    if exhausted:
+        print(f"[i] {len(exhausted)} clé(s) à réponse VIDE reproductible "
+              f"(>= {retry_empty} tentatives) -> abandonnées, plus retentées.")
+        print("    Ce n'est pas une panne : le modèle renvoie du vide sur ces prompts.")
+        print("    Diagnostic : python probe_empty.py --results <csv> --prompts-file <dataset>")
+    if pending:
+        print(f"[i] {len(pending)} clé(s) à réponse vide -> une nouvelle tentative.")
+    return ok | exhausted
 
 
 def main():
@@ -94,6 +105,9 @@ def main():
     ap.add_argument("--sleep", type=float, default=0.0, help="pause entre appels (s)")
     ap.add_argument("--quiet", action="store_true",
                     help="n'affiche pas l'aperçu de la réponse (statut seul)")
+    ap.add_argument("--retry-empty", type=int, default=2,
+                    help="nb max de tentatives sur une réponse VIDE avant abandon "
+                         "(défaut 2 ; 0 = ne jamais retenter une réponse vide)")
     args = ap.parse_args()
 
     # 1) modèles depuis models.yaml, en gardant leur client (donc leur base_url).
@@ -124,7 +138,7 @@ def main():
         out = Path(DEFAULT_RESULTS_DIR) / out.name
     out.parent.mkdir(parents=True, exist_ok=True)
 
-    done = load_done(out)
+    done = load_done(out, retry_empty=args.retry_empty)
     new_file = not out.exists()
     total = len(prompts) * len(args.languages) * len(chosen)
     todo = total - len(done)
@@ -178,7 +192,15 @@ def main():
                     })
                     fh.flush()  # <-- chaque réponse est sur le disque tout de suite
 
-                    print("REFUSED" if refused else ("ERROR" if is_error else "OK"))
+                    if is_error:
+                        status = "ERROR"
+                    elif not resp.strip():
+                        status = "EMPTY"      # 200 OK mais le modèle n'a rien produit
+                    elif refused:
+                        status = "REFUSED"
+                    else:
+                        status = "OK"
+                    print(status)
                     if not args.quiet:
                         print(f"    -> {preview[:300]}")
                     if args.sleep:
