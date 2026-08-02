@@ -51,18 +51,29 @@ def load_done(path: Path):
     faux résultats dus aux read timeouts). Le CSV garde alors l'ancienne ligne
     erreur + la nouvelle tentative ; à l'analyse, écarter les is_error=True
     (la dernière tentative par clé fait foi).
+
+    Les lignes SANS réponse (response_full vide, is_error non renseigné — écriture
+    interrompue) ne comptent pas non plus : sans ce filtre elles sont comptées
+    comme faites et le run annonce « rien à faire » alors qu'il manque des appels.
     """
+    csv.field_size_limit(10 ** 8)
     done = set()
     errors = 0
+    holes = 0
     if path.exists():
         with open(path, newline="", encoding="utf-8") as f:
             for r in csv.DictReader(f):
                 if (r.get("is_error") or "").strip() == "True":
                     errors += 1
                     continue
+                if not (r.get("response_full") or "").strip():
+                    holes += 1
+                    continue
                 done.add((r["prompt_id"], r["lang"], r["model"]))
     if errors:
         print(f"[i] {errors} ligne(s) en erreur dans {path.name} -> seront retentées.")
+    if holes:
+        print(f"[i] {holes} ligne(s) sans réponse dans {path.name} -> seront retentées.")
     return done
 
 
