@@ -97,10 +97,37 @@ def main():
     ds = {r["prompt_id"]: r for r in csv.DictReader(
         open(args.prompts_file, newline="", encoding="utf-8"))}
 
-    print(f"[i] {args.results} : {n_rows} lignes, {n_keys} clés uniques")
-    print(f"[i] trous (aucune réponse) : {len(holes)}")
+    # --- contrôle de complétude : la grille attendue est-elle couverte ? -------
+    # Un trou peut avoir DEUX causes très différentes : la clé a été appelée et
+    # le modèle n'a rien renvoyé, ou la clé n'a JAMAIS été appelée (run coupé).
+    # Compter les lignes du CSV ne les distingue pas — une même clé peut y
+    # figurer 3 fois. On compare donc au produit dataset x conditions x langues.
+    langs = sorted({k[1] for k in
+                    {(r["prompt_id"], r["lang"]) for r in
+                     csv.DictReader(open(args.results, newline="", encoding="utf-8"))}})
+    variants = sorted({r["task_variant"] for r in
+                       csv.DictReader(open(args.results, newline="", encoding="utf-8"))
+                       if r.get("task_variant")})
+    attempted = {(r["prompt_id"], r["lang"]) for r in
+                 csv.DictReader(open(args.results, newline="", encoding="utf-8"))}
+    multi = any("__" in pid for pid, _ in attempted)
+    grid = {(f"{p}__{v}" if multi else p, l)
+            for p in ds for v in (variants or ["task01"]) for l in langs}
+    never = grid - attempted
+
+    print(f"[i] {args.results}")
+    print(f"    {n_rows} lignes -> {n_keys} clés uniques "
+          f"(une clé peut avoir plusieurs tentatives : ne compte pas les lignes)")
+    print(f"    grille attendue : {len(ds)} arrêts x {len(variants) or 1} condition(s) "
+          f"x {len(langs)} langue(s) = {len(grid)}")
+    print(f"    jamais appelées : {len(never)}")
+    print(f"    appelées mais réponse vide : {len(holes)}")
+    print(f"    exploitables : {len(grid) - len(never) - len(holes)}")
+    if never:
+        print(f"    /!\\ {len(never)} clé(s) n'ont JAMAIS été appelées -> relancer run_tf.py")
+        print("        par langue :", dict(Counter(k[1] for k in never)))
     if not holes:
-        print("[✓] rien à diagnostiquer.")
+        print("[✓] aucune réponse vide à diagnostiquer.")
         return
 
     print(f"    tentatives déjà faites par trou : {dict(Counter(holes.values()))}")
