@@ -56,10 +56,14 @@ def construire_travail(lignes, bras_demande, k_override=None):
 
 
 def appliquer_shard(travail, shard):
+    """Shard PAR PARAGRAPHE : chaque shard couvre les 4 langues et les 2 conditions
+    d'un sous-ensemble de paragraphes. Un shard reste donc interpretable seul."""
     if not shard:
         return travail
     i, n = (int(x) for x in shard.split("/"))
-    return [t for j, t in enumerate(travail) if j % n == (i - 1)]
+    paras = sorted({t["para_id"] for t in travail})
+    mien = {p for j, p in enumerate(paras) if j % n == (i - 1)}
+    return [t for t in travail if t["para_id"] in mien]
 
 
 def deja_fait(path):
