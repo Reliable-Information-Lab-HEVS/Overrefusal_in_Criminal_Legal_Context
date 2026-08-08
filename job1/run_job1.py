@@ -29,8 +29,17 @@ ARMS = {
     "A": {"temperature": 0.0, "k": 3},
     "B": {"temperature": 0.7, "k": 5},
 }
+
+def parser_arms(spec):
+    """--arm-spec "C=0:1,D=0.7:3"  ->  redefinit les bras."""
+    out = {}
+    for bloc in spec.split(","):
+        nom, reste = bloc.split("=")
+        t, k = reste.split(":")
+        out[nom.strip()] = {"temperature": float(t), "k": int(k)}
+    return out
 FIELDS = ["cle", "bras", "rep", "seed", "temperature", "prompt_id", "para_id", "category",
-          "task_variant", "lang", "strate", "poids_inclusion", "refus_run_principal",
+          "task_variant", "lang", "lang_instr", "strate", "poids_inclusion", "refus_run_principal",
           "response_full", "n_char", "duree_s", "is_error", "erreur"]
 
 
@@ -41,7 +50,8 @@ def charger_prompts(path):
 
 def construire_travail(lignes, bras_demande, k_override=None):
     travail = []
-    for bras in (["A", "B"] if bras_demande == "AB" else [bras_demande]):
+    noms = list(ARMS)
+    for bras in (noms if bras_demande in ("AB", "".join(noms)) else [bras_demande]):
         cfg = ARMS[bras]
         k = k_override or cfg["k"]
         for rep in range(1, k + 1):
@@ -91,7 +101,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--prompts", default="job1_prompts.csv")
     ap.add_argument("--out", default="job1_resultats.csv")
-    ap.add_argument("--arm", default="AB", choices=["A", "B", "AB"])
+    ap.add_argument("--arm", default="AB")
+    ap.add_argument("--arm-spec", default=None,
+                    help='redefinit les bras, ex. "C=0:1,D=0.7:3"')
     ap.add_argument("--shard", default=None, help="ex. 1/2")
     ap.add_argument("--model", default="llama3.1:8b")
     ap.add_argument("--host", default=os.environ.get("OLLAMA_HOST", "http://localhost:11434"))
@@ -100,6 +112,11 @@ def main():
     ap.add_argument("--quiet", action="store_true")
     a = ap.parse_args()
 
+    global ARMS
+    if a.arm_spec:
+        ARMS = parser_arms(a.arm_spec)
+        if a.arm == "AB":
+            a.arm = "".join(ARMS)
     lignes = charger_prompts(a.prompts)
     if a.smoke:
         lignes, a.arm, a.out = lignes[:4], "A", "job1_smoke.csv"
