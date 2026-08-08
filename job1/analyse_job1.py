@@ -63,20 +63,34 @@ def main():
             print(f"   ecart-type stochastique           : {d['sd_stochastique_pts']:.1f} pts")
         print()
 
-    # --- l'argument de fond : effet du prefixe vs bruit, sur les memes cellules
+    # --- l'argument de fond : effet apparie, avec la BONNE erreur-type
     b = df[df.bras == "B"]
     if len(b):
-        cel = b.groupby(CELL + ["condition", "strate", "poids_inclusion"]).is_refused.mean().reset_index()
-        w = cel.groupby("condition").apply(
-            lambda x: np.average(x.is_refused, weights=x.poids_inclusion))
-        effet = 100 * (w.get("prefixe", np.nan) - w.get("none", np.nan))
-        sd = decomposition(b)["sd_stochastique_pts"]
-        print("=== effet du prefixe vs composante stochastique (ponderé) ===")
-        print(f"none {100*w.get('none', np.nan):.1f} %  ->  prefixe {100*w.get('prefixe', np.nan):.1f} %"
-              f"   delta {effet:+.1f} pts")
-        print(f"rapport delta / ecart-type stochastique : {abs(effet)/sd:.1f}x")
-        print("\nNB : les taux ci-dessus sont ceux du sous-echantillon stratifie (ponderes).")
-        print("     Les taux de reference du memoire restent ceux du run complet.")
+        cel = b.groupby(CELL + ["para_id", "condition", "strate", "poids_inclusion"]) \
+               .is_refused.mean().reset_index()
+        piv = cel.pivot_table(index=["para_id", "lang", "strate", "poids_inclusion"],
+                              columns="condition", values="is_refused").dropna().reset_index()
+        piv["d"] = piv.prefixe - piv.none
+        w = piv.poids_inclusion.values
+        m = np.average(piv.d, weights=w)
+        rng = np.random.default_rng(42)
+        idx = rng.integers(0, len(piv), (2000, len(piv)))
+        bs = np.array([np.average(piv.d.values[i], weights=w[i]) for i in idx])
+        se = bs.std(); lo, hi = np.percentile(bs, [2.5, 97.5])
+        print("=== effet du prefixe (moyenne des k tirages par cellule, pondere) ===")
+        print(f'none {100*np.average(piv.none, weights=w):.1f} %  ->  '
+              f'prefixe {100*np.average(piv.prefixe, weights=w):.1f} %')
+        print(f"delta {100*m:+.1f} pts | IC95 [{100*lo:+.1f} ; {100*hi:+.1f}] | erreur-type {100*se:.1f} pt")
+        print(f"delta / erreur-type = {abs(m/se):.0f}")
+        print(f"paires : {int((piv.d>0).sum())} en hausse, {int((piv.d==0).sum())} inchangees, "
+              f"{int((piv.d<0).sum())} en baisse")
+        print()
+        print("ATTENTION : ne jamais comparer ce delta a l'ecart-type stochastique par tirage")
+        print("(28 pts environ). Le bruit porte sur UNE reponse ; l'estimation agregee a une")
+        print("erreur-type ~sqrt(n) fois plus petite. La comparaison correcte est delta/erreur-type.")
+        print()
+        print("NB : taux du sous-echantillon stratifie pondere. Les taux de reference du")
+        print("     memoire restent ceux du run complet.")
 
 if __name__ == "__main__":
     main()
