@@ -6,7 +6,7 @@ documents (e.g. internal Federal Tribunal cases that cannot be shared), copy
 tool at it:
 
 ```bash
-python run.py --prompts-file data/my_cases.csv --ollama-only --languages fr de it
+python run.py --prompts-file data/my_cases.csv --languages fr de it
 ```
 
 You do **not** need to pre-build prefixed files. The authority/jailbreak prefix

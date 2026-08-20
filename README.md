@@ -1,7 +1,8 @@
 # Authority Prefixes Trigger Over-refusal in Small Open-Weight LLMs
 
 Anonymous code and data for the paper
-*LLMs Prompted for Legal Context Object More: Overrefusal from Small On-Premises LLMs in Criminal Legal Context.*
+*LLMs Prompted for Legal Context Refuse More: Overrefusal from Small
+On-Premises LLMs in Criminal Legal Context.*
 
 ## TL;DR
 
@@ -12,9 +13,50 @@ a benign prompt changes the refusal behavior of small open-weight LLMs.
 Across four models (Llama 3.1 8B, Gemma 4 E4B, Qwen 3 8B, Apertus 8B), five
 OR-Bench categories (violence, sexual, harmful, illegal, unethical) and three
 languages (English, French, German), **authority prefixes consistently
-*increase* refusal**, often 2–20×, the opposite of what one might expect.
+*increase* refusal**, often 2–20×, the opposite of what one might expect. The
+same effect holds on real Swiss Federal Supreme Court judgments.
 
-Everything runs **on-premises** via [Ollama](https://ollama.com). No API keys.
+Everything runs **on-premises** via [Ollama](https://ollama.com). No API keys,
+except optionally DeepL when rebuilding the translated datasets.
+
+## What changed since the first release
+
+- **The real-text arm is now a real experiment.** 192 Swiss Federal Supreme
+  Court judgments split into 1 652 fact paragraphs, in three languages, instead
+  of 20 whole documents. Collection, translation and splitting scripts included.
+- **Every response is re-labelled by an LLM-as-a-judge**, on both the OR-Bench
+  arm and the BGer arm, answering the "keyword detection only" limitation.
+- **One set of models throughout.** Earlier rounds included `gemma3:4b` and
+  `qwen2.5:7b`; only the four models of the paper are kept here, which is why
+  the real-text arm is released at paragraph level only — that is the level at
+  which all four were run.
+
+## The two experiments
+
+| | prompts | languages | prefix conditions | results |
+|---|---|---|---|---|
+| **OR-Bench** | 200 per category × 5 categories | en, fr, de | none, lawyer, supreme-court, jailbreak (en) / none, supreme-court (fr, de) | `results/english/`, `results/french_german/`, `results/master_long.csv` |
+| **BGer judgments** | 1 652 fact paragraphs from 192 judgments | en, fr, de (+ it for two models) | none, supreme-court | `results/real_text/` |
+
+Both were re-judged end to end by a local LLM-as-a-judge — see
+[results/judge/](results/judge/).
+
+## Models
+
+The paper evaluates exactly these four, all served locally with temperature 0,
+no system prompt and Ollama defaults:
+
+```bash
+ollama pull llama3.1:8b
+ollama pull qwen3:8b
+ollama pull gemma4:e4b
+ollama pull hf.co/bartowski/swiss-ai_Apertus-8B-Instruct-2509-GGUF:Q4_K_M
+ollama pull qwen2.5:14b     # judge only, not evaluated
+```
+
+Earlier rounds of this project also ran `gemma3:4b` and `qwen2.5:7b`. Those runs
+are **not** part of this release: every number and every file here comes from
+the four models above.
 
 ## Setup
 
@@ -22,19 +64,13 @@ Everything runs **on-premises** via [Ollama](https://ollama.com). No API keys.
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-
-ollama pull llama3.1:8b
-ollama pull qwen3:8b
-ollama pull gemma4:e4b
-ollama pull hf.co/bartowski/swiss-ai_Apertus-8B-Instruct-2509-GGUF:Q4_K_M
 ```
 
-All models run locally with temperature 0, no system prompt, Ollama defaults.
-
-## Pipeline
+## Running the evaluation
 
 ```
-run.py --prefix …   →   results/*.csv   →   unify.py   →   master_long.csv   →   heatmap.py / table_frde.py
+run.py --prefix …  →  results/*.csv  →  unify.py  →  master_long.csv  →  figures/tables
+                   ↘  run_judge.py   →  results/judge/*.csv
 ```
 
 The prefix condition is injected **at run time** with `--prefix`
@@ -42,27 +78,13 @@ The prefix condition is injected **at run time** with `--prefix`
 `over_refusal/prefixes.py`. The same base prompt file is reused for every
 condition — no need to pre-build prefixed CSVs.
 
-### Quick test
-
 Sanity-check the whole pipeline in a few seconds (3 prompts, English only):
 
 ```bash
 python run.py --prompts-file data/orbench_violence200.csv --quick
 ```
 
-### Run the evaluation
-
-```bash
-# one topic, English, supreme-court prefix
-python run.py \
-  --prompts-file data/orbench_violence200.csv \
-  --languages en \
-  --prefix supreme-court \
-  --output orbench_violence200_supreme.csv
-```
-
-Full English run (5 topics × 4 conditions, all four models — models default to
-the four above):
+Full English run (5 topics × 4 conditions, all four models):
 
 ```bash
 for topic in violence sexual harmful unethical illegal; do
@@ -86,77 +108,121 @@ for topic in violence sexual harmful unethical illegal; do
 done
 ```
 
-### Build the master table and the figures
+Real legal texts, paragraph by paragraph. The released runs used `--task-mode
+all`, which emits both the plain instruction (`task_<lang>`, baseline) and the
+instruction with the prefix already in it (`task_hard_<lang>`, supreme-court):
 
 ```bash
-python helpers/unify.py        # merge all result CSVs -> results/master_long.csv
-python helpers/table_frde.py   # print the French/German table (paper Table 1)
-python helpers/heatmap.py      # render heatmap_english.png/.pdf
+python run.py --prompts-file data/bger_para200.csv \
+  --languages en fr de --task-mode all \
+  --output bger_para200.csv
 ```
 
-`results/master_long.csv` is the single long-format source of truth
-(`model, lang, topic, prefix, prompt_id, is_refused`). `heatmap.py` holds the
-published English figure values inline so the figure stays pinned to the paper.
+`--prefix supreme-court` on the baseline task is the run-time equivalent and
+gives the same wording, joined with a blank line instead of a space.
+
+## Tables and figures
+
+```bash
+python helpers/unify.py           # merge OR-Bench result CSVs -> results/master_long.csv
+python helpers/heatmap.py         # English heatmap (paper Figure 1)
+python helpers/table_frde.py      # French/German table (paper Table 1)
+python helpers/table_realtext.py  # BGer paragraph table (paper Table 2)
+python helpers/judge_agreement.py # keyword vs judge, per language and model
+```
+
+`results/master_long.csv` is the single long-format source of truth for the
+OR-Bench arm (`model, lang, topic, prefix, prompt_id, is_refused`).
 
 ## Refusal detection
 
-Keyword matching only (method of Cui et al., 2025), extended with French and
-German keyword lists derived from native model outputs. See
+Keyword matching (method of Cui et al., 2025), extended with French and German
+keyword lists derived from native model outputs rather than translation. See
 `over_refusal/detector.py` and `over_refusal/data/refusal_keywords.json`.
 Detection scans only the opening of each response.
 
-The released CSVs already contain a precomputed `is_refused` column, so all
-tables/figures reproduce directly from the data. Note: `response_full` is empty
-for some early-batch rows; the response text for those is in `response_preview`
-(500 chars, enough for the opening-window detector).
+Every released CSV already carries a precomputed `is_refused` column, so all
+tables and figures reproduce directly from the data, without a GPU.
+
+A second, independent pass labels every response with a local LLM-as-a-judge
+(`run_judge.py`, three OR-Bench classes). It confirms the keyword measurement
+where the two are comparable — Cohen's κ = 0.94 for Llama on the BGer
+paragraphs — and shows where the judge's `indirect_refusal` class cannot be
+transferred across models. Read [results/judge/README.md](results/judge/README.md)
+before quoting any judge number.
 
 ## Data
 
 ```
 data/
-├── orbench_<topic>200.csv   # 200 OR-Bench prompts per category (fr/de/it/en text)
-├── bger_sample.csv          # 20 real Swiss Federal Tribunal cases
-├── US_sample.csv            # 10 documents from the public "Epstein Files" set
-├── template_input.csv       # blank template for your own documents
-└── INPUT_FORMAT.md          # how to fill it
+├── orbench_<topic>200.csv   200 OR-Bench prompts per category (fr/de/it/en)
+├── bger_full200.csv         200 Swiss Federal Supreme Court judgments, facts only
+├── bger_para200.csv         the same judgments split into 1 652 paragraphs (192 judgments)
+├── bger_sample.csv          the first 20 judgments, evaluated as whole documents
+├── US_sample.csv            10 documents from the public "Epstein Files" set
+├── template_input.csv       blank template for your own documents
+└── INPUT_FORMAT.md          how to fill it
 ```
 
-OR-Bench prompts are the first 200 per category from the OR-Bench-80K release.
-To run on your own confidential documents, fill `data/template_input.csv` and
-pass it with `--prompts-file` (see `data/INPUT_FORMAT.md`). The text stays on
-your machine; only aggregated refusal counts are produced.
+Every prompt file uses the same columns: `task_<lang>` (instruction),
+`task_hard_<lang>` (instruction with the supreme-court prefix baked in), and
+`text_<lang>` (the document or question). To run on your own confidential
+documents, fill `data/template_input.csv` and pass it with `--prompts-file`. The
+text stays on your machine; only aggregated refusal counts are produced.
 
-### Regenerate the prompt set from scratch
+### Rebuilding the datasets
 
-The `data/orbench_*200.csv` files are provided, but can be rebuilt:
+OR-Bench prompts (first 200 per category of the OR-Bench-80K release):
 
 ```bash
-# 1. download 200 prompts per category from OR-Bench-80K (English)
 for topic in violence sexual harmful unethical illegal; do
   python helpers/extract_orbench.py ${topic} data/orbench_${topic}200.csv 200
 done
-
-# 2. add French / German / Italian columns via DeepL
-python helpers/translate_prompts.py --key <DEEPL_KEY>
+python helpers/translate_prompts.py          # DeepL, key from .env
 ```
 
-The real-document sets (`bger_sample.csv`, `US_sample.csv`) are provided as-is;
-their source-acquisition step is not part of this release.
+Swiss Federal Supreme Court corpus:
+
+```bash
+python helpers/bger_scrape.py --out data/bger_full200.csv --target 180
+python helpers/bger_translate.py --in data/bger_full200.csv --out data/bger_full200.csv
+python helpers/split_paragraphs.py --csv data/bger_full200.csv --write
+```
+
+`bger_scrape.py` queries the public AZA collection of bger.ch with
+offense-specific terms in French and German (never article numbers — the same
+number means different things in different Swiss statutes), keeps criminal-law
+dockets, extracts the facts section, and deduplicates by reference and by
+content. `bger_translate.py` fills the missing language columns from the
+judgment's own source language; the DeepL key is read from `DEEPL_API_KEY` (see
+`.env.example`) and is never written to any output file.
+
+`split_paragraphs.py` keeps a judgment only if its four language versions have
+the same number of paragraphs: 192 of the 200 judgments qualify, giving the
+1 652 line-aligned paragraphs used in the paper. The 8 excluded judgments and
+the language where each one diverges are printed by the script.
 
 ## Repository layout
 
 ```
 over_refusal/     pipeline (Ollama client, prefixes, detector, runner)
-helpers/          unify.py, table_frde.py, heatmap.py, extract_orbench.py,
-                  translate_prompts.py, compare*.py, summary_frde.py
-data/             prompt CSVs (see above)
+run.py            run an evaluation
+run_judge.py      LLM-as-a-judge pass over a result CSV
+helpers/          data collection, unification, tables, figures
+data/             prompt and document CSVs (see above)
 results/
-├── english/        English runs (4 prefixes)
-├── french_german/  FR/DE runs (+ refusal_matrices/ audit files)
-├── real_text/      bger + US (Epstein) real-document runs
-└── master_long.csv unified long-format results
+├── english/        OR-Bench English runs (4 prefixes)
+├── french_german/  OR-Bench FR/DE runs (+ refusal_matrices/ audit files)
+├── real_text/
+│   ├── bger_para/    BGer paragraph runs, one CSV per model
+│   ├── bger_sample.csv   the 20 judgments as whole documents
+│   └── US_sample.csv     "Epstein Files" documents
+├── judge/          LLM-as-a-judge labels for everything above
+└── master_long.csv unified OR-Bench results
+paraphrasing_test/  robustness of the effect to prefix rewording (paper appendix)
 ```
 
 ## License
 
-Code: MIT. OR-Bench prompts keep their original CC-BY-4.0 license.
+Code: MIT. OR-Bench prompts keep their original CC-BY-4.0 license. BGer
+judgments are public Swiss case law.
