@@ -18,7 +18,7 @@ same effect holds on real Swiss Federal Supreme Court judgments (BGER) - 200 doc
 selected by querying offense-specific terms restricted to the criminal-law dockets.
 
 Response is considered as refused if either it's classified ''directly refused'' 
-by an LLM-as-a-judge(Qwen2.5:14b) or keyword-matching ORbench method,
+by an LLM-as-a-judge(Qwen2.5:14b) or by keyword-matching OR-Bench method,
 that was extended with French and German keyword lists manually refined by 
 native-speakers authors of the paper. See [results/judge/](results/judge/)
 
