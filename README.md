@@ -14,8 +14,10 @@ Across four models (Llama 3.1 8B, Gemma 4 E4B, Qwen 3 8B, Apertus 8B), five
 OR-Bench categories (violence, sexual, harmful, illegal, unethical) and three
 languages (English, French, German), **authority prefixes consistently
 *increase* refusal**, often 2–20×, the opposite of what one might expect. The
-same effect holds on real Swiss Federal Supreme Court judgments (BGER) - 200 documents  
-Response is considered as refused if either it's classified ``directly refused'' 
+same effect holds on real Swiss Federal Supreme Court judgments (BGER) - 200 documents
+selected by querying offense-specific terms restricted to the criminal-law dockets.
+
+Response is considered as refused if either it's classified ''directly refused'' 
 by an LLM-as-a-judge(Qwen2.5:14b) or keyword-matching ORbench method,
 that was extended with French and German keyword lists manually refined by 
 native-speakers authors of the paper. See [results/judge/](results/judge/)
