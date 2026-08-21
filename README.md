@@ -1,4 +1,4 @@
-# Authority Prefixes Trigger Over-refusal in Small Open-Weight LLMs
+R# Authority Prefixes Trigger Over-refusal in Small Open-Weight LLMs
 
 Anonymous code and data for the paper
 *LLMs Prompted for Legal Context Refuse More: Overrefusal from Small
@@ -14,32 +14,21 @@ Across four models (Llama 3.1 8B, Gemma 4 E4B, Qwen 3 8B, Apertus 8B), five
 OR-Bench categories (violence, sexual, harmful, illegal, unethical) and three
 languages (English, French, German), **authority prefixes consistently
 *increase* refusal**, often 2–20×, the opposite of what one might expect. The
-same effect holds on real Swiss Federal Supreme Court judgments.
+same effect holds on real Swiss Federal Supreme Court judgments (BGER) - 200 documents  
+Response is considered as refused if either it's classified ``directly refused'' 
+by an LLM-as-a-judge(Qwen2.5:14b) or keyword-matching ORbench method,
+that was extended with French and German keyword lists manually refined by 
+native-speakers authors of the paper. See [results/judge/](results/judge/)
 
 Everything runs **on-premises** via [Ollama](https://ollama.com). No API keys,
 except optionally DeepL when rebuilding the translated datasets.
-
-## What changed since the first release
-
-- **The real-text arm is now a real experiment.** 192 Swiss Federal Supreme
-  Court judgments split into 1 652 fact paragraphs, in three languages, instead
-  of 20 whole documents. Collection, translation and splitting scripts included.
-- **Every response is re-labelled by an LLM-as-a-judge**, on both the OR-Bench
-  arm and the BGer arm, answering the "keyword detection only" limitation.
-- **One set of models throughout.** Earlier rounds included `gemma3:4b` and
-  `qwen2.5:7b`; only the four models of the paper are kept here, which is why
-  the real-text arm is released at paragraph level only — that is the level at
-  which all four were run.
 
 ## The two experiments
 
 | | prompts | languages | prefix conditions | results |
 |---|---|---|---|---|
 | **OR-Bench** | 200 per category × 5 categories | en, fr, de | none, lawyer, supreme-court, jailbreak (en) / none, supreme-court (fr, de) | `results/english/`, `results/french_german/`, `results/master_long.csv` |
-| **BGer judgments** | 1 652 fact paragraphs from 192 judgments | en, fr, de (+ it for two models) | none, supreme-court | `results/real_text/` |
-
-Both were re-judged end to end by a local LLM-as-a-judge — see
-[results/judge/](results/judge/).
+| **BGer judgments** | 1 652 fact paragraphs from 200 judgments | en, fr, de | none, supreme-court | `results/real_text/` |
 
 ## Models
 
