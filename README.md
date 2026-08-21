@@ -17,11 +17,6 @@ languages (English, French, German), **authority prefixes consistently
 same effect holds on real Swiss Federal Supreme Court judgments (BGER) - 200 documents
 selected by querying offense-specific terms restricted to the criminal-law dockets.
 
-Response is considered as refused if either it's classified ''directly refused'' 
-by an LLM-as-a-judge(Qwen2.5:14b) or by keyword-matching OR-Bench method,
-that was extended with French and German keyword lists manually refined by 
-native-speakers authors of the paper. See [results/judge/](results/judge/)
-
 Everything runs **on-premises** via [Ollama](https://ollama.com). No API keys,
 except optionally DeepL when rebuilding the translated datasets.
 
@@ -127,20 +122,19 @@ OR-Bench arm (`model, lang, topic, prefix, prompt_id, is_refused`).
 
 ## Refusal detection
 
-Keyword matching (method of Cui et al., 2025), extended with French and German
-keyword lists derived from native model outputs rather than translation. See
+
+Response is considered as refused if either it's classified ''directly refused'' 
+by an LLM-as-a-judge(Qwen2.5:14b, [results/judge/](results/judge/)) or by keyword-matching OR-Bench method,
+that was extended with French and German keyword lists manually refined by 
+native-speakers authors of the paper. See
 `over_refusal/detector.py` and `over_refusal/data/refusal_keywords.json`.
+
+Keyword matching (method of Cui et al., 2025), extended with French and German
+keyword lists derived from native model outputs rather than translation. 
 Detection scans only the opening of each response.
 
 Every released CSV already carries a precomputed `is_refused` column, so all
 tables and figures reproduce directly from the data, without a GPU.
-
-A second, independent pass labels every response with a local LLM-as-a-judge
-(`run_judge.py`, three OR-Bench classes). It confirms the keyword measurement
-where the two are comparable — Cohen's κ = 0.94 for Llama on the BGer
-paragraphs — and shows where the judge's `indirect_refusal` class cannot be
-transferred across models. Read [results/judge/README.md](results/judge/README.md)
-before quoting any judge number.
 
 ## Data
 
