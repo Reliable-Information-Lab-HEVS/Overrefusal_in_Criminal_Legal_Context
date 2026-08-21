@@ -1,4 +1,4 @@
-R# Authority Prefixes Trigger Over-refusal in Small Open-Weight LLMs
+# Authority Prefixes Trigger Over-refusal in Small Open-Weight LLMs
 
 Anonymous code and data for the paper
 *LLMs Prompted for Legal Context Refuse More: Overrefusal from Small
