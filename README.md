@@ -136,6 +136,23 @@ Detection scans only the opening of each response.
 Every released CSV already carries a precomputed `is_refused` column, so all
 tables and figures reproduce directly from the data, without a GPU.
 
+## Statistical tests
+
+To check whether an authority-framing prefix actually shifts refusal
+behavior rather than reflecting noise, we pair each prompt's baseline
+(`none`) response with its response under a prefix and run McNemar's exact
+test (one-sided: does the prefix increase refusals), then apply a
+Holm-Bonferroni correction across all tests run within each language family,
+since we run one test per model/language/prefix combination. This is done
+separately for the English OR-Bench arm, the French/German OR-Bench arm, and
+the real BGer paragraph arm. See
+[results/mcnemar_summary.md](results/mcnemar_summary.md) for the full
+write-up and result tables, and the `mcnemar_analysis.py` /
+`holm_bonferroni.py` scripts with their `mcnemar_appendix.csv` outputs in
+[results/english/](results/english/), [results/french_german/](results/french_german/),
+and [results/real_text/](results/real_text/) for the underlying pipeline and
+numbers.
+
 ## Data
 
 ```
