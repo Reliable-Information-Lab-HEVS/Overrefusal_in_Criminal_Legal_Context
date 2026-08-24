@@ -213,14 +213,25 @@ run_judge.py      LLM-as-a-judge pass over a result CSV
 helpers/          data collection, unification, tables, figures
 data/             prompt and document CSVs (see above)
 results/
-├── english/        OR-Bench English runs (4 prefixes)
-├── french_german/  OR-Bench FR/DE runs (+ refusal_matrices/ audit files)
+├── english/        OR-Bench English runs (4 prefixes), refusal_summary_english.*,
+│                   mcnemar_analysis.py / mcnemar_results.csv (McNemar test)
+├── french_german/  OR-Bench FR/DE runs (+ refusal_matrices/ audit files),
+│                   refusal_summary_french_german.*, mcnemar_analysis.py /
+│                   holm_bonferroni.py / mcnemar_appendix.csv
 ├── real_text/
 │   ├── bger_para/    BGer paragraph runs, one CSV per model
 │   ├── bger_sample.csv   the 20 judgments as whole documents
-│   └── US_sample.csv     "Epstein Files" documents
-├── judge/          LLM-as-a-judge labels for everything above
-└── master_long.csv unified OR-Bench results
+│   ├── US_sample.csv     "Epstein Files" documents
+│   └── mcnemar_analysis.py / holm_bonferroni.py / mcnemar_appendix.csv
+│                       McNemar/Holm-Bonferroni test, BGer paragraph arm
+├── judge/          LLM-as-a-judge labels: orbench.csv (OR-Bench, all langs),
+│                   bger_para/, bger_sample.csv, US_sample.csv
+├── LLM-as-a-judge-final-aggregated-results/judge_master_long.csv
+│                   long-format judge labels for OR-Bench, used by the
+│                   McNemar and refusal-summary scripts above
+├── master_long.csv unified OR-Bench results (keyword detector only)
+├── mcnemar_appendix.csv, holm_bonferroni.py   English McNemar/Holm-Bonferroni test
+└── mcnemar_summary.md   write-up combining all three statistical-test arms
 paraphrasing_test/  robustness of the effect to prefix rewording (paper appendix)
 ```
 
