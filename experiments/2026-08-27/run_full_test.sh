@@ -3,30 +3,31 @@
 # orbench_violence800_answer: FULL TEST
 #
 # 800 prompts x 4 models x 2 prefixes = 6400 generations. Long-running --
-# run the smoke test first (run_smoke_test.sh) to confirm the environment
-# works before spending a SLURM allocation on this.
+# run run_smoke_test.sh FIRST and use its timing_smoke.txt output to set
+# --time below realistically before submitting this.
 #
-# ---- SLURM ----------------------------------------------------------------
-# This is a plain bash script with #SBATCH directives, so it can be
-# submitted directly:
+# Runs inside the Apptainer container (cluster/apptainer/overrefusal.def)
+# via the same self-re-exec pattern as cluster/slurm/run_experiments.sh --
+# bare `ollama`/`python3` do not exist on this cluster outside the
+# container.
+#
 #   sbatch experiments/2026-08-27/run_full_test.sh
-# TODO fill these in for your cluster -- these are placeholders, not real
-# values (partition/account names, GPU resource name, and the time limit
-# all vary per cluster):
 #
 #SBATCH --job-name=orbench_violence800_answer
 #SBATCH --output=experiments/2026-08-27/results/slurm_%j.out
 #SBATCH --error=experiments/2026-08-27/results/slurm_%j.err
-#SBATCH --partition=TODO_partition_name
-#SBATCH --account=TODO_account_name
-#SBATCH --gres=gpu:1
+#SBATCH --gres=gpu:a100:1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32G
-#SBATCH --time=24:00:00        # TODO: no throughput data yet for this
-                                # hardware -- the smoke test's per-request
-                                # time x 6400 is your best early estimate;
-                                # pad generously, incremental output means
-                                # a timeout doesn't lose completed rows.
+#SBATCH --time=24:00:00        # TODO: set this from run_smoke_test.sh's
+                                # timing_smoke.txt (per_generation_avg x 6400,
+                                # padded), not left at this placeholder --
+                                # observed early throughput on this A100 was
+                                # ~4 tokens/sec for llama3.1:8b, which would
+                                # make 6400 generations take far longer than
+                                # 24h if that holds across all 4 models.
+#SBATCH --qos=normal            # TODO: confirm this QOS allows a job this
+                                # long on your account.
 #
 # Also runs fine without a scheduler, e.g. inside tmux on an interactive
 # allocation:
@@ -35,12 +36,18 @@
 # -----------------------------------------------------------------------------
 
 set -euo pipefail
-cd "$(dirname "$0")/../.."   # repo root
+SCRIPT_PATH="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+REPO_ROOT="$(dirname "$SCRIPT_PATH")/../.."
+cd "$REPO_ROOT"
+REPO_ROOT="$(pwd)"
 
 CSV_PATH="data/orbench_violence800_new.csv"
 OUT_DIR="experiments/2026-08-27/results"
-MODELS_DIR="${FULL_OLLAMA_MODELS_DIR:-$HOME/ollama_full_models}"
+# Shared, persistent model store -- same one pull_models.sh / manual pulls
+# already populated, so this doesn't re-download anything.
+MODELS_DIR="${FULL_OLLAMA_MODELS_DIR:-$HOME/.ollama/models}"
 LOG="$OUT_DIR/ollama_server.log"
+SIF="${OVERREFUSAL_SIF:-$HOME/containers/overrefusal.sif}"
 
 MODELS=(
   "llama3.1:8b"
@@ -52,19 +59,20 @@ PREFIXES=("answer-armasuisse" "answer-analyst")
 
 mkdir -p "$OUT_DIR" "$MODELS_DIR"
 
+if [ -z "${INSIDE_APPTAINER_OVERREFUSAL:-}" ]; then
+  export INSIDE_APPTAINER_OVERREFUSAL=1
+  exec apptainer exec --nv --bind "$HOME:$HOME" --pwd "$REPO_ROOT" \
+    "$SIF" bash "$SCRIPT_PATH" "$@"
+fi
+
+T_START=$(date +%s)
+
 echo "=== 1. Pick a free port ==="
 PORT=$(python3 -c "import socket; s=socket.socket(); s.bind(('127.0.0.1',0)); print(s.getsockname()[1]); s.close()")
 URL="http://127.0.0.1:${PORT}/api/generate"
 echo "  using port $PORT"
 
-echo "=== 2. Start private Ollama server ==="
-# No CUDA_VISIBLE_DEVICES override here -- SLURM's --gres=gpu:1 above (or
-# your own env, if run outside SLURM) already controls which GPU(s) are
-# visible to this job. If you ever see an "offloaded 0/N layers to GPU"
-# line in $LOG, that means Ollama silently fell back to CPU -- check
-# `nvidia-smi` / `CUDA_VISIBLE_DEVICES` before assuming the run is just
-# slow (this happened on another box in this project: see CLAUDE.md's
-# "current work in progress" section).
+echo "=== 2. Start private Ollama server (already inside the container) ==="
 OLLAMA_HOST="127.0.0.1:${PORT}" OLLAMA_MODELS="$MODELS_DIR" \
   ollama serve > "$LOG" 2>&1 &
 SERVER_PID=$!
@@ -92,20 +100,34 @@ echo "  confirmed: pid $SERVER_PID owns port $PORT"
 echo "=== 5. Sanity check GPU placement ==="
 nvidia-smi --query-gpu=index,name,memory.used --format=csv 2>&1 || true
 
-echo "=== 6. Pull the 4 models into OUR OWN verified server ==="
+echo "=== 6. Verify all 4 models are already pulled ==="
+# Deliberately NOT pulling here -- run this only after the models are
+# already in $MODELS_DIR (they should be, from earlier manual pulls /
+# pull_models.sh). Fails fast with a clear message instead of silently
+# trying (and failing) to download mid-run.
+MISSING=0
 for m in "${MODELS[@]}"; do
-  echo "  pulling $m ..."
-  OLLAMA_HOST="127.0.0.1:${PORT}" ollama pull "$m"
+  if ! OLLAMA_HOST="127.0.0.1:${PORT}" ollama list | grep -qF "$m"; then
+    echo "  MISSING: $m"
+    MISSING=1
+  fi
 done
+if [ "$MISSING" -eq 1 ]; then
+  echo "ABORT: pull the missing model(s) first (see run_smoke_test.sh's step 5 message)."
+  kill "$SERVER_PID" 2>/dev/null || true
+  exit 1
+fi
 
 echo "=== 7. Run both prefixes (English, all 800 prompts) ==="
 for prefix in "${PREFIXES[@]}"; do
   echo "--- prefix: $prefix ---"
+  T0=$(date +%s)
   python3 run.py --prompts-file "$CSV_PATH" \
     --languages en --prefix "$prefix" \
     --ollama-url "$URL" \
     --incremental-output "$OUT_DIR/orbench_violence800_${prefix}_incremental.csv" \
     --output "$OUT_DIR/orbench_violence800_${prefix}.csv"
+  echo "  prefix $prefix took $(( $(date +%s) - T0 ))s (800 x ${#MODELS[@]} = $(( 800 * ${#MODELS[@]} )) generations)"
 done
 
 echo "=== 8. Keyword-only refusal summary ==="
@@ -117,6 +139,7 @@ python3 helpers/refusal_summary.py \
 echo "=== 9. Stop the private Ollama server ==="
 kill "$SERVER_PID" 2>/dev/null || true
 
-echo "ALL DONE."
+echo "ALL DONE. Total elapsed: $(( $(date +%s) - T_START ))s"
 echo "  results  : $OUT_DIR/orbench_violence800_<prefix>.csv"
 echo "  summary  : $OUT_DIR/refusal_summary.txt"
+echo "Run 'seff \$SLURM_JOB_ID' (if submitted via sbatch) to check actual memory/time usage."
