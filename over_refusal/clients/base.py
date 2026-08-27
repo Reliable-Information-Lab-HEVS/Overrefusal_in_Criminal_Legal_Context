@@ -2,7 +2,7 @@
 
 
 class BaseClient:
-    """Subclasses must implement query(prompt, model) -> str."""
+    """Subclasses must implement query(prompt, model, num_ctx=None) -> str."""
 
-    def query(self, prompt: str, model: str) -> str:
+    def query(self, prompt: str, model: str, num_ctx: int = None) -> str:
         raise NotImplementedError("query() must be implemented in subclass")

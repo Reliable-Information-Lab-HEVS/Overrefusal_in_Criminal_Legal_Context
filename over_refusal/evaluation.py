@@ -1,40 +1,26 @@
 """Run the over-refusal evaluation.
 
 Pipeline for one prompt:
-  1. Build the full prompt (task instruction + case text).
-  2. Send it to each model (Ollama + APIs as configured).
+  1. Build the full prompt (task instruction + case text), with an optional
+     authority/jailbreak prefix.
+  2. Send it to each local Ollama model.
   3. Detect a refusal with keyword matching (RefusalDetector).
   4. Save the response and a refusal flag to a CSV row.
 
-The LLM-as-judge step (3-class classification) is a separate script,
-see judge.py. We keep keyword matching here for speed; judge.py is run
-afterwards on the produced CSV.
+Refusal detection is keyword-based only, consistent with the paper.
 """
 
 import argparse
-import time
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from over_refusal.clients import (
-    ApertusClient,
-    ClaudeClient,
-    GeminiClient,
-    MistralClient,
-    OllamaClient,
-    OpenAIClient,
-)
+from over_refusal.clients import OllamaClient
 from over_refusal.config import (
-    APERTUS_DEFAULT_MODEL,
-    CLAUDE_DEFAULT_MODEL,
     DEFAULT_LANGUAGES,
     DEFAULT_OLLAMA_MODELS,
     DEFAULT_PROMPTS_FILE,
     DEFAULT_RESULTS_DIR,
-    GEMINI_DEFAULT_MODEL,
-    MISTRAL_DEFAULT_MODEL,
-    OPENAI_DEFAULT_MODEL,
     SUPPORTED_LANGUAGES,
 )
 from over_refusal.detector import RefusalDetector
@@ -49,55 +35,36 @@ PROMPT_PREVIEW_CHARS = 200
 RESPONSE_PREVIEW_CHARS = 500
 TERMINAL_PREVIEW_CHARS = 300
 
-# Small delay between API calls to be polite to the providers
-API_RATE_LIMIT_SECONDS = 0.5
-
 
 class EvaluationRunner:
-    """Orchestrate one full evaluation run across prompts, languages and models."""
+    """Orchestrate one full evaluation run across prompts, languages and models.
 
-    def __init__(self):
+    All models run locally via Ollama. Remote/server LLM backends were removed:
+    the project is on-premises only (data residency + confidentiality), so the
+    only backend is the local Ollama server.
+    """
+
+    def __init__(self, ollama_url: str = None):
         self.detector = RefusalDetector()
-        # Backend name -> client instance
+        # Backend name -> client instance (local only). ollama_url lets a run
+        # target an alternate local Ollama server (e.g. a second instance
+        # pinned to a specific GPU via CUDA_VISIBLE_DEVICES) instead of the
+        # shared default one.
         self.clients = {
-            "ollama": OllamaClient(),
-            "mistral_api": MistralClient(),
-            "openai_api": OpenAIClient(),
-            "claude_api": ClaudeClient(),
-            "gemini_api": GeminiClient(),
-            "apertus_api": ApertusClient(),
+            "ollama": OllamaClient(base_url=ollama_url) if ollama_url else OllamaClient(),
         }
 
     def build_models(
         self,
-        ollama_only: bool = False,
-        api_only: bool = False,
         ollama_models: List[str] = None,
     ) -> List[Tuple[str, str]]:
         """Return the list of (backend, model_name) pairs to test."""
         if ollama_models is None:
             ollama_models = DEFAULT_OLLAMA_MODELS
-
-        models: List[Tuple[str, str]] = []
-
-        # Local Ollama models first (free, fast on the cluster)
-        if not api_only:
-            for model_name in ollama_models:
-                models.append(("ollama", model_name))
-
-        # Remote APIs after
-        if not ollama_only:
-            #models.append(("mistral_api", MISTRAL_DEFAULT_MODEL))
-            #models.append(("openai_api", OPENAI_DEFAULT_MODEL))
-            #models.append(("claude_api", CLAUDE_DEFAULT_MODEL))
-            #models.append(("gemini_api", GEMINI_DEFAULT_MODEL))
-            models.append(("apertus_api", APERTUS_DEFAULT_MODEL))
-        return models
+        return [("ollama", model_name) for model_name in ollama_models]
 
     def run(
         self,
-        ollama_only: bool = False,
-        api_only: bool = False,
         ollama_models: List[str] = None,
         languages: List[str] = None,
         prompts_file: Optional[str] = None,
@@ -106,8 +73,18 @@ class EvaluationRunner:
         limit: Optional[int] = None,
         task_mode: str = "normal",
         prefix: str = "none",
+        num_ctx: Optional[int] = None,
+        incremental_output: Optional[str] = None,
     ) -> List[Dict]:
-        """Run the evaluation and return the list of result dicts."""
+        """Run the evaluation and return the list of result dicts.
+
+        If ``incremental_output`` is set, each row is also appended to that
+        file immediately as it's produced (flushed to disk), so a crash
+        partway through a long run doesn't lose everything already
+        completed -- a companion to, not a replacement for, the final
+        save_csv() call in main().
+        """
+        saver = ResultSaver() if incremental_output else None
 
         if languages is None:
             languages = DEFAULT_LANGUAGES
@@ -133,11 +110,7 @@ class EvaluationRunner:
                 "Check --categories / --prompt-ids / --limit."
             )
 
-        models = self.build_models(
-            ollama_only=ollama_only,
-            api_only=api_only,
-            ollama_models=ollama_models,
-        )
+        models = self.build_models(ollama_models=ollama_models)
 
         results: List[Dict] = []
         total = len(prompts) * len(languages) * len(models)
@@ -186,11 +159,7 @@ class EvaluationRunner:
                     if client is None:
                         response_text = "[ERROR] Unknown backend"
                     else:
-                        response_text = client.query(prompt_text, model_name)
-
-                    # Be gentle with paid APIs
-                    if backend != "ollama":
-                        time.sleep(API_RATE_LIMIT_SECONDS)
+                        response_text = client.query(prompt_text, model_name, num_ctx=num_ctx)
 
                     # Keyword refusal check
                     refused = self.detector.is_refusal(response_text, language)
@@ -202,7 +171,7 @@ class EvaluationRunner:
                     else:
                         response_preview = response_text[:RESPONSE_PREVIEW_CHARS].replace("\n", " ")
 
-                    results.append({
+                    row = {
                         "prompt_id": prompt_id,
                         "domain": domain,
                         "category": category,
@@ -216,7 +185,10 @@ class EvaluationRunner:
                         "response_full": response_text,
                         "is_refused": refused,
                         "is_error": is_error,
-                    })
+                    }
+                    results.append(row)
+                    if saver is not None:
+                        saver.append_row(incremental_output, row)
 
                     # Print status + a short preview to follow the run live
                     if refused:
@@ -250,11 +222,7 @@ def _resolve_output_path(user_output: Optional[str]) -> str:
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Over-Refusal Evaluation")
 
-    # --- Model selection ---
-    parser.add_argument("--api-only", action="store_true",
-                        help="Only test API models (no Ollama)")
-    parser.add_argument("--ollama-only", action="store_true",
-                        help="Only test Ollama models (no API calls)")
+    # --- Model selection (all models run locally via Ollama) ---
     parser.add_argument("--ollama-models", nargs="+", default=DEFAULT_OLLAMA_MODELS,
                         help="List of Ollama models to test")
 
@@ -281,6 +249,19 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--prefix", choices=PREFIX_CHOICES, default="none",
                         help="Authority/jailbreak prefix prepended to every prompt "
                              "(per language). Default: none (baseline).")
+    parser.add_argument("--num-ctx", type=int, default=None,
+                        help="Explicit Ollama context window (tokens) for this run. "
+                             "Default: unset, i.e. Ollama's own default. Recommended "
+                             "for long documents to avoid silent truncation.")
+    parser.add_argument("--ollama-url", type=str, default=None,
+                        help="Alternate Ollama /api/generate URL (e.g. a second "
+                             "local instance on another port/GPU). Default: the "
+                             "shared server from over_refusal/config.py.")
+    parser.add_argument("--incremental-output", type=str, default=None,
+                        help="Also append each row to this CSV as it's produced "
+                             "(flushed immediately), so a crash partway through a "
+                             "long run doesn't lose completed results. The final "
+                             "--output file is still written as usual at the end.")
 
     # --- Shortcut & output ---
     parser.add_argument("--quick", action="store_true",
@@ -301,13 +282,11 @@ def main() -> None:
         languages = ["en"]
         print("QUICK MODE: 3 prompts, English only\n")
 
-    runner = EvaluationRunner()
+    runner = EvaluationRunner(ollama_url=args.ollama_url)
     saver = ResultSaver()
     printer = SummaryPrinter()
 
     results = runner.run(
-        ollama_only=args.ollama_only,
-        api_only=args.api_only,
         ollama_models=args.ollama_models,
         languages=languages,
         prompts_file=args.prompts_file,
@@ -316,6 +295,8 @@ def main() -> None:
         limit=limit,
         task_mode=args.task_mode,
         prefix=args.prefix,
+        num_ctx=args.num_ctx,
+        incremental_output=args.incremental_output,
     )
 
     output_path = _resolve_output_path(args.output)

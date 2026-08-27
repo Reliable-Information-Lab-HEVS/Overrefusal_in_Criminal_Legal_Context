@@ -11,12 +11,16 @@ class OllamaClient(BaseClient):
         self.base_url = base_url
         self.timeout = timeout
 
-    def query(self, prompt: str, model: str) -> str:
+    def query(self, prompt: str, model: str, num_ctx: int = None) -> str:
+        options = {"temperature": 0.0}
+        if num_ctx is not None:
+            options["num_ctx"] = num_ctx
+
         payload = {
             "model": model,
             "prompt": prompt,
             "stream": False,
-            "options": {"temperature": 0.0},
+            "options": options,
         }
 
         try:

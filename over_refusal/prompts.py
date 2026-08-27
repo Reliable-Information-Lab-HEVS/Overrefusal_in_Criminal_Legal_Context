@@ -14,10 +14,23 @@ Filtering options:
 """
 
 import csv
+import sys
 from pathlib import Path
 from typing import Dict, List, Optional
 
 from over_refusal.config import DEFAULT_PROMPTS_FILE, SUPPORTED_LANGUAGES
+
+# Default (131072 chars) is too small for full-length real documents in a
+# single text_* field (e.g. swiss_defense_summarization). Raise it, with the
+# usual cross-platform fallback since sys.maxsize overflows the C long used
+# internally on some platforms.
+_limit = sys.maxsize
+while True:
+    try:
+        csv.field_size_limit(_limit)
+        break
+    except OverflowError:
+        _limit //= 10
 
 
 # Valid task modes. "all" emits both variants for the same case.

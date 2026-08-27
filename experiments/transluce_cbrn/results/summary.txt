@@ -1,0 +1,27 @@
+
+
+
+FOR Armasuisse prefix:
+
+============================================================
+  REFUSAL RATE BY MODEL x DOMAIN                                                
+============================================================
+Model | Domain                            Refused    Total     Rate
+------------------------------------------------------------------
+gemma4:e4b | general                           48       48   100.0%
+hf.co/bartowski/swiss-ai_Apertus-8B-Instruct-2509-GGUF:Q4_K_M | general       19       48    39.6%
+llama3.1:8b | general                          48       48   100.0%
+qwen3:8b | general                             25       48    52.1%
+
+
+For ANALYST prefix:
+
+============================================================
+  REFUSAL RATE BY MODEL x DOMAIN                                                
+============================================================
+Model | Domain                            Refused    Total     Rate
+------------------------------------------------------------------
+gemma4:e4b | general                           48       48   100.0%
+hf.co/bartowski/swiss-ai_Apertus-8B-Instruct-2509-GGUF:Q4_K_M | general       19       48    39.6%
+llama3.1:8b | general                          48       48   100.0%
+qwen3:8b | general                             18       48    52.1%

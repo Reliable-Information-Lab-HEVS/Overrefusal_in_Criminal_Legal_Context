@@ -33,3 +33,21 @@ class ResultSaver:
 
         print(f"\nResults saved to: {out_path}")
         return str(out_path)
+
+    def append_row(self, filename: str, row: Dict) -> None:
+        """Append a single result row to ``filename``, writing the header
+        first if the file doesn't exist yet. Opens/closes/flushes per call
+        so each row is safely on disk even if the process is killed right
+        after -- used for crash-safe incremental saving on long runs, as a
+        companion to (not a replacement for) the final save_csv() call.
+        """
+        out_path = Path(filename)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        write_header = not out_path.exists() or out_path.stat().st_size == 0
+
+        with open(out_path, "a", newline="", encoding="utf-8") as fh:
+            writer = csv.DictWriter(fh, fieldnames=row.keys())
+            if write_header:
+                writer.writeheader()
+            writer.writerow(row)
+            fh.flush()

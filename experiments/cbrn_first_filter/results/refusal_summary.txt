@@ -1,0 +1,15 @@
+=== cbrn_extract2-armasuisse.csv ===
+model                                                            n  refused  errors    rate
+gemma4:e4b                                                      50        0       0    0.0%
+hf.co/bartowski/swiss-ai_Apertus-8B-Instruct-2509-GGUF:Q4_K_M    50        1       0    2.0%
+llama3.1:8b                                                     50        0       0    0.0%
+qwen3:8b                                                        50        0       0    0.0%
+TOTAL                                                          200        1       0    0.5%
+
+=== cbrn_extract2-professional.csv ===
+model                                                            n  refused  errors    rate
+gemma4:e4b                                                      50        0       0    0.0%
+hf.co/bartowski/swiss-ai_Apertus-8B-Instruct-2509-GGUF:Q4_K_M    50        0       0    0.0%
+llama3.1:8b                                                     50        0       0    0.0%
+qwen3:8b                                                        50        0       0    0.0%
+TOTAL                                                          200        0       0    0.0%
