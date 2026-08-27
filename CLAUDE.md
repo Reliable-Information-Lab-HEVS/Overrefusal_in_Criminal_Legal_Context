@@ -160,6 +160,66 @@ accidentally reused a colleague's already-running private instance on a
 hardcoded port. Prefer the free-port + ownership-check pattern for any new
 GPU1 script.
 
+## Cluster migration: armasuisse Slurm + Apptainer
+
+Branch `slurm-apptainer-migration` (not yet merged) adds a `cluster/`
+directory that reproduces the OR-Bench + real-BGer experiments on a
+separate Slurm+Apptainer cluster (`gpu-login1.intlab.ch`, A100-PCIe-40GB,
+Ubuntu 24.04 nodes) instead of this repo's usual single-RTX-4090/system-
+Ollama setup. See `cluster/README.md` for the full build/submit
+walkthrough; short version:
+
+```
+cluster/
+├── apptainer/overrefusal.def   Ollama (bundled GPU backends, no CUDA
+│                                toolkit needed — Apptainer's --nv binds the
+│                                host driver at runtime) + a Python venv with
+│                                pinned datasets/fsspec/huggingface_hub
+│                                (fixes a "fsspec glob '**' invalid pattern"
+│                                failure hit on an old Python-3.8 cluster)
+└── slurm/
+    ├── pull_models.sh          one-time model warm-up (avoids a real
+    │                            concurrent-`ollama pull` race across the
+    │                            job array below, since all tasks share one
+    │                            $HOME/.ollama/models store)
+    ├── run_experiments.sh      GPU job array (--array=0-5): one OR-Bench
+    │                            topic per task (0-4) + the real-BGer arm
+    │                            (5, one output file per model, matching
+    │                            results/real_text/bger_para/'s existing
+    │                            per-model naming). Re-execs itself inside
+    │                            the container so `python3 run.py` actually
+    │                            picks up the pinned venv, not the host's.
+    ├── run_stats.sh             CPU-only: McNemar/Holm-Bonferroni + figures
+    ├── concat_csv.py            safe multi-CSV concat (never cat/tail —
+    │                            response fields contain embedded newlines)
+    └── build_judge_master_long.py
+                                  rebuilds results/LLM-as-a-judge-final-
+                                  aggregated-results/judge_master_long.csv,
+                                  a file with no producing script in this
+                                  repo (it's a hand spreadsheet export —
+                                  nested CSV: an inner RFC4180 row treated as
+                                  one field of an outer semicolon-delimited
+                                  export) that results/english/
+                                  mcnemar_analysis.py and results/
+                                  french_german/mcnemar_analysis.py both
+                                  hard-depend on. Reproduced byte-for-byte
+                                  in that format rather than touching those
+                                  two already-published analysis scripts.
+```
+
+Also added on this branch: `scipy` to `requirements.txt` (a real,
+previously-undeclared dependency of `results/*/mcnemar_analysis.py`'s
+`scipy.stats.binomtest` import).
+
+Known gaps as of authoring: no A100 throughput numbers yet (the Slurm
+scripts' `--time`/`--mem` are unvalidated placeholders — right-size with
+`seff <jobid>` after a first real task), `--fakeroot` build-permission
+unconfirmed for this account, and the OR-Bench arm still cycles through all
+4 models per prompt within a topic task (a further per-model array split,
+like the BGer task 5 already does via `--ollama-models <model>`, would
+avoid that reload overhead but isn't implemented). See `cluster/README.md`'s
+"Known gaps" section for details.
+
 ## Known gotchas / conventions
 
 - `--num-ctx` should be set explicitly (e.g. `40960`) for long documents to

@@ -1,8 +1,8 @@
 """Keyword-based refusal detector.
 
 Loads refusal keywords from `data/refusal_keywords.json`.
-This is the fast first-pass check from OR-Bench (Cui et al., 2025).
-For ambiguous or partial refusals, the LLM-as-judge in `judge.py` is used.
+This is the keyword-matching method from OR-Bench (Cui et al., 2025) and the
+only refusal-detection method used in this work.
 """
 
 import json
