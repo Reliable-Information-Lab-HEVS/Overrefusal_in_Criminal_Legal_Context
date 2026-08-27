@@ -1,0 +1,132 @@
+Bootstrap: docker
+From: ubuntu:24.04
+
+# overrefusal.def -- environment container for the "Authority Prefixes
+# Trigger Over-refusal in Small Open-Weight LLMs" pipeline, built for the
+# armasuisse Slurm + Apptainer cluster (gpu-login1.intlab.ch, A100-PCIe-40GB,
+# driver 595.71.05, CUDA 13.2, Ubuntu 24.04 compute nodes).
+#
+# WHAT'S INSIDE, AND WHY:
+#
+# - Base image is plain ubuntu:24.04, matching the compute nodes' own OS, on
+#   purpose -- NOT an nvidia/cuda:* base image. Ollama's own Linux release
+#   tarball already bundles its GPU-accelerated backend libraries; it does
+#   not need a system-wide CUDA toolkit. GPU access at runtime instead comes
+#   from Apptainer's `--nv` flag, which bind-mounts the HOST's own NVIDIA
+#   driver libraries into the container and matches them to the host's
+#   kernel driver (595.71.05) -- so baking a specific CUDA toolkit version
+#   into the image would be both unnecessary and a needless way to get the
+#   driver/runtime version wrong. Verified: the ollama binary installed here
+#   has no direct CUDA link (`ldd` shows nothing); its backends are loaded
+#   via dlopen at runtime from its own lib/ollama directory.
+#
+# - Ollama is pinned to a specific released version (not "latest") and its
+#   Linux amd64 tarball is checksum-verified against the published
+#   sha256sum.txt, for build reproducibility -- this container is meant to
+#   ship with the paper.
+#
+# - Python deps are installed via `uv` (not pip) into a fixed venv at
+#   /opt/venv, with EXPLICIT pinned versions for datasets/fsspec/
+#   huggingface_hub (the trio that broke on the old cluster: Python 3.8 +
+#   an old pip + fsspec's glob rejecting "**" patterns with
+#   "Invalid pattern: '**'"). The fix here is two-fold: (1) Python 3.12
+#   (Ubuntu 24.04's default python3) is used instead of 3.8, and (2) `uv`'s
+#   resolver -- not a bare old pip -- is used to install a pinned, mutually
+#   compatible set. These exact versions (datasets 3.1.0 / fsspec 2024.9.0 /
+#   huggingface_hub 0.36.2) were confirmed working together against the
+#   actual bench-llm/or-bench dataset used by this repo before being pinned
+#   here.
+#
+# - The repo itself is NOT baked into the image. It's bind-mounted at
+#   runtime from $HOME on the cluster (Apptainer does this by default) and
+#   run with `apptainer exec --nv overrefusal.sif python3 run.py ...` from
+#   inside the repo directory. This keeps the container reusable across
+#   code changes without a rebuild, and is what makes "release the .def
+#   with the paper" meaningful -- readers rebuild the *environment*, and
+#   pull the *code* from the repo itself.
+#
+# BUILD (see cluster/README.md for the full walkthrough): never on the
+# login node (resource limits). From an Sinteractive session:
+#   apptainer build --fakeroot overrefusal.sif overrefusal.def
+
+%post
+    set -eu
+    export DEBIAN_FRONTEND=noninteractive
+
+    echo "=== apt packages ==="
+    apt-get update
+    apt-get install -y --no-install-recommends \
+        ca-certificates curl zstd git \
+        python3 python3-venv python3-dev \
+        build-essential pkg-config
+    rm -rf /var/lib/apt/lists/*
+
+    echo "=== Ollama (pinned release, checksum-verified) ==="
+    OLLAMA_VERSION="v0.33.1"
+    OLLAMA_TARBALL="ollama-linux-amd64.tar.zst"
+    OLLAMA_SHA256="88e0d36bd90121595e5516c84f6ab61b546368fbd2d825b4aae70999c949649d"
+    cd /tmp
+    curl -fsSL -o "$OLLAMA_TARBALL" \
+        "https://github.com/ollama/ollama/releases/download/${OLLAMA_VERSION}/${OLLAMA_TARBALL}"
+    echo "${OLLAMA_SHA256}  ${OLLAMA_TARBALL}" | sha256sum -c -
+    tar --zstd -xf "$OLLAMA_TARBALL" -C /usr
+    rm -f "$OLLAMA_TARBALL"
+    # Sanity check: the binary must be present and runnable (--version needs
+    # no GPU/model, so this works fine at build time on a non-GPU builder).
+    /usr/bin/ollama --version
+
+    echo "=== uv (pinned) ==="
+    UV_VERSION="0.7.17"
+    curl -LsSf "https://astral.sh/uv/${UV_VERSION}/install.sh" | env UV_INSTALL_DIR=/usr/local/bin sh
+
+    echo "=== Python venv + pinned deps ==="
+    /usr/local/bin/uv venv /opt/venv --python 3.12
+    . /opt/venv/bin/activate
+    # Base repo deps (requests, python-dotenv, beautifulsoup4) plus the
+    # pinned datasets/fsspec/huggingface_hub trio, plus numpy/matplotlib/
+    # scipy for the stats + figure scripts (scipy is a real, previously
+    # undeclared dependency of results/*/mcnemar_analysis.py -- added to
+    # requirements.txt on this branch too).
+    /usr/local/bin/uv pip install \
+        "requests==2.32.4" \
+        "python-dotenv==1.0.1" \
+        "beautifulsoup4==4.12.3" \
+        "datasets==3.1.0" \
+        "fsspec==2024.9.0" \
+        "huggingface_hub==0.36.2" \
+        "numpy==2.1.3" \
+        "scipy==1.14.1" \
+        "matplotlib==3.9.2"
+
+    mkdir -p /results_scratch  # harmless placeholder, not used at runtime
+
+%environment
+    export PATH=/opt/venv/bin:/usr/local/bin:$PATH
+    # Quiets Ollama's own progress bars in batch logs; harmless if unused.
+    export OLLAMA_NOHISTORY=1
+
+%runscript
+    echo "This container provides the environment only (Ollama + Python venv)."
+    echo "Run the pipeline from the repo, e.g.:"
+    echo "  apptainer exec --nv overrefusal.sif python3 run.py --quick"
+    exec "$@"
+
+%labels
+    Author anonymous-for-review
+    Pipeline "Authority Prefixes Trigger Over-refusal in Small Open-Weight LLMs"
+    OllamaVersion v0.33.1
+    BuiltFor "armasuisse Slurm+Apptainer cluster, A100-PCIe-40GB, Ubuntu 24.04"
+
+%help
+    Environment container for the over-refusal evaluation pipeline.
+    Contains: Ollama v0.33.1 (GPU backends bundled, no CUDA toolkit needed --
+    use `apptainer exec --nv` so the host driver is bound in), Python 3.12
+    venv at /opt/venv with pinned deps (see %post for exact versions).
+    Does NOT contain the repo code -- bind-mount/cd into it at runtime.
+
+    Build (from an Sinteractive session, never the login node):
+        apptainer build --fakeroot overrefusal.sif overrefusal.def
+
+    Run:
+        apptainer exec --nv overrefusal.sif ollama serve &
+        apptainer exec --nv overrefusal.sif python3 run.py --quick
