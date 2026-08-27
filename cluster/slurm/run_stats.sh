@@ -16,10 +16,19 @@
 #SBATCH --qos=normal
 
 set -euo pipefail
-SCRIPT_PATH="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
-REPO_ROOT="$(dirname "$SCRIPT_PATH")/../.."
+# Resolve the repo root via SLURM_SUBMIT_DIR (always set by sbatch, to the
+# directory it was invoked from), NOT $0 -- sbatch commonly copies a
+# submitted batch script to a per-job spool file before executing it, so $0
+# does not reliably point back to this file's real location in the repo
+# under sbatch (a well-known Slurm gotcha; bit us in practice: $0-based
+# resolution landed on an unwritable path and "mkdir -p experiments/..."
+# failed with Permission denied, in a sibling script using the same
+# pattern). Falls back to the current directory for direct `bash script.sh`
+# use -- run it from the repo root in that case, matching every usage
+# example here.
+REPO_ROOT="${SLURM_SUBMIT_DIR:-$(pwd)}"
 cd "$REPO_ROOT"
-REPO_ROOT="$(pwd)"
+SCRIPT_PATH="$REPO_ROOT/cluster/slurm/run_stats.sh"
 mkdir -p cluster/slurm/logs
 
 SIF="${OVERREFUSAL_SIF:-$HOME/containers/overrefusal.sif}"
