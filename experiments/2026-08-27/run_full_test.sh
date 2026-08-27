@@ -2,9 +2,9 @@
 #
 # orbench_violence800_answer: FULL TEST
 #
-# 800 prompts x 4 models x 2 prefixes = 6400 generations. Long-running --
-# run run_smoke_test.sh FIRST and use its timing_smoke.txt output to set
-# --time below realistically before submitting this.
+# Default: 800 prompts x 4 models x 2 prefixes = 6400 generations.
+# Long-running -- run run_smoke_test.sh FIRST and use its timing_smoke.txt
+# output to set --time below realistically before submitting this.
 #
 # Runs inside the Apptainer container (cluster/apptainer/overrefusal.def)
 # via the same self-re-exec pattern as cluster/slurm/run_experiments.sh --
@@ -12,6 +12,16 @@
 # container.
 #
 #   sbatch experiments/2026-08-27/run_full_test.sh
+#
+# To run a SMALLER slice instead of all 800 (e.g. while still waiting on
+# timing data, or to spend less GPU time), override FULL_CSV_PATH and
+# RUN_LABEL together -- e.g. the pre-built 100-prompt slice
+# (orbench_violence_204..303, deliberately NOT overlapping the 3 prompts
+# run_smoke_test.sh already used at _201.._203):
+#   FULL_CSV_PATH=data/orbench_violence100_new.csv RUN_LABEL=violence100 \
+#     sbatch experiments/2026-08-27/run_full_test.sh
+# Output filenames use RUN_LABEL, so a 100-prompt run and an 800-prompt run
+# never collide or get confused with each other.
 #
 #SBATCH --job-name=orbench_violence800_answer
 #SBATCH --output=experiments/2026-08-27/results/slurm_%j.out
@@ -41,7 +51,8 @@ REPO_ROOT="$(dirname "$SCRIPT_PATH")/../.."
 cd "$REPO_ROOT"
 REPO_ROOT="$(pwd)"
 
-CSV_PATH="data/orbench_violence800_new.csv"
+CSV_PATH="${FULL_CSV_PATH:-data/orbench_violence800_new.csv}"
+RUN_LABEL="${RUN_LABEL:-violence800}"
 OUT_DIR="experiments/2026-08-27/results"
 # Shared, persistent model store -- same one pull_models.sh / manual pulls
 # already populated, so this doesn't re-download anything.
@@ -118,28 +129,29 @@ if [ "$MISSING" -eq 1 ]; then
   exit 1
 fi
 
-echo "=== 7. Run both prefixes (English, all 800 prompts) ==="
+N_PROMPTS=$(( $(wc -l < "$CSV_PATH") - 1 ))
+echo "=== 7. Run both prefixes (English, $N_PROMPTS prompts from $CSV_PATH) ==="
 for prefix in "${PREFIXES[@]}"; do
   echo "--- prefix: $prefix ---"
   T0=$(date +%s)
   python3 run.py --prompts-file "$CSV_PATH" \
     --languages en --prefix "$prefix" \
     --ollama-url "$URL" \
-    --incremental-output "$OUT_DIR/orbench_violence800_${prefix}_incremental.csv" \
-    --output "$OUT_DIR/orbench_violence800_${prefix}.csv"
-  echo "  prefix $prefix took $(( $(date +%s) - T0 ))s (800 x ${#MODELS[@]} = $(( 800 * ${#MODELS[@]} )) generations)"
+    --incremental-output "$OUT_DIR/${RUN_LABEL}_${prefix}_incremental.csv" \
+    --output "$OUT_DIR/${RUN_LABEL}_${prefix}.csv"
+  echo "  prefix $prefix took $(( $(date +%s) - T0 ))s ($N_PROMPTS x ${#MODELS[@]} = $(( N_PROMPTS * ${#MODELS[@]} )) generations)"
 done
 
 echo "=== 8. Keyword-only refusal summary ==="
 python3 helpers/refusal_summary.py \
-  "$OUT_DIR/orbench_violence800_answer-armasuisse.csv" \
-  "$OUT_DIR/orbench_violence800_answer-analyst.csv" \
-  --output "$OUT_DIR/refusal_summary.txt"
+  "$OUT_DIR/${RUN_LABEL}_answer-armasuisse.csv" \
+  "$OUT_DIR/${RUN_LABEL}_answer-analyst.csv" \
+  --output "$OUT_DIR/refusal_summary_${RUN_LABEL}.txt"
 
 echo "=== 9. Stop the private Ollama server ==="
 kill "$SERVER_PID" 2>/dev/null || true
 
 echo "ALL DONE. Total elapsed: $(( $(date +%s) - T_START ))s"
-echo "  results  : $OUT_DIR/orbench_violence800_<prefix>.csv"
-echo "  summary  : $OUT_DIR/refusal_summary.txt"
+echo "  results  : $OUT_DIR/${RUN_LABEL}_<prefix>.csv"
+echo "  summary  : $OUT_DIR/refusal_summary_${RUN_LABEL}.txt"
 echo "Run 'seff \$SLURM_JOB_ID' (if submitted via sbatch) to check actual memory/time usage."

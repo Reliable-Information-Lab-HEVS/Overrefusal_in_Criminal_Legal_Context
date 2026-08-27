@@ -101,35 +101,41 @@ if [ "$OWNER_PID" != "$SERVER_PID" ]; then
 fi
 echo "  confirmed: pid $SERVER_PID owns port $PORT"
 
-echo "=== 5. Verify the 4 models are present (not pulling here -- see README) ==="
+echo "=== 5. Check which models are present (not pulling here -- see README) ==="
+# Lenient by design: runs with whatever's already pulled rather than
+# aborting, so you're not blocked waiting on a slow model download (e.g.
+# Apertus) to test the rest of the pipeline. Only fails if NONE are present.
 T0=$(date +%s)
-MISSING=0
+MODELS_TO_RUN=()
 for m in "${MODELS[@]}"; do
-  if ! OLLAMA_HOST="127.0.0.1:${PORT}" ollama list | grep -qF "$m"; then
-    echo "  MISSING: $m"
-    MISSING=1
+  if OLLAMA_HOST="127.0.0.1:${PORT}" ollama list | grep -qF "$m"; then
+    MODELS_TO_RUN+=("$m")
+  else
+    echo "  SKIPPING (not pulled yet): $m"
   fi
 done
-if [ "$MISSING" -eq 1 ]; then
-  echo "ABORT: pull the missing model(s) first, e.g.:"
+if [ "${#MODELS_TO_RUN[@]}" -eq 0 ]; then
+  echo "ABORT: none of the 4 models are pulled yet. Pull at least one, e.g.:"
   echo "  apptainer exec --env OLLAMA_HOST=127.0.0.1:${PORT},OLLAMA_MODELS=$MODELS_DIR $SIF ollama pull <model>"
   kill "$SERVER_PID" 2>/dev/null || true
   exit 1
 fi
+echo "  running with: ${MODELS_TO_RUN[*]}"
 log_timing "model_verify" "$(( $(date +%s) - T0 ))"
 
-echo "=== 6. Run both prefixes (English, $SMOKE_LIMIT prompts) ==="
+echo "=== 6. Run both prefixes (English, $SMOKE_LIMIT prompts, ${#MODELS_TO_RUN[@]}/${#MODELS[@]} models) ==="
 for prefix in "${PREFIXES[@]}"; do
   echo "--- prefix: $prefix ---"
   T0=$(date +%s)
   python3 run.py --prompts-file "$CSV_PATH" \
     --languages en --prefix "$prefix" --limit "$SMOKE_LIMIT" \
+    --ollama-models "${MODELS_TO_RUN[@]}" \
     --ollama-url "$URL" \
     --incremental-output "$OUT_DIR/orbench_violence800_${prefix}_smoke_incremental.csv" \
     --output "$OUT_DIR/orbench_violence800_${prefix}_smoke.csv"
   ELAPSED=$(( $(date +%s) - T0 ))
-  N_GEN=$(( SMOKE_LIMIT * ${#MODELS[@]} ))
-  log_timing "prefix_${prefix}_total ($N_GEN generations)" "$ELAPSED"
+  N_GEN=$(( SMOKE_LIMIT * ${#MODELS_TO_RUN[@]} ))
+  log_timing "prefix_${prefix}_total ($N_GEN generations, ${#MODELS_TO_RUN[@]} models)" "$ELAPSED"
   log_timing "prefix_${prefix}_per_generation_avg" "$(python3 -c "print(round($ELAPSED / $N_GEN, 1))")"
 done
 
@@ -145,10 +151,14 @@ kill "$SERVER_PID" 2>/dev/null || true
 TOTAL_ELAPSED=$(( $(date +%s) - T_START ))
 log_timing "TOTAL_smoke_test" "$TOTAL_ELAPSED"
 
-TOTAL_GEN=$(( SMOKE_LIMIT * ${#MODELS[@]} * ${#PREFIXES[@]} ))
+TOTAL_GEN=$(( SMOKE_LIMIT * ${#MODELS_TO_RUN[@]} * ${#PREFIXES[@]} ))
 FULL_GEN=$(( 800 * ${#MODELS[@]} * ${#PREFIXES[@]} ))
 echo "" | tee -a "$TIMING_FILE"
-echo "Extrapolation hint: this smoke test ran $TOTAL_GEN generations." | tee -a "$TIMING_FILE"
+echo "Extrapolation hint: this smoke test ran $TOTAL_GEN generations with ${#MODELS_TO_RUN[@]}/${#MODELS[@]} models." | tee -a "$TIMING_FILE"
+if [ "${#MODELS_TO_RUN[@]}" -lt "${#MODELS[@]}" ]; then
+  echo "NOTE: this did not cover all models -- re-run once the rest are pulled before trusting" | tee -a "$TIMING_FILE"
+  echo "the per-generation average for models not yet tested (they may differ in speed)." | tee -a "$TIMING_FILE"
+fi
 echo "The full run is $FULL_GEN generations (800 prompts x ${#MODELS[@]} models x ${#PREFIXES[@]} prefixes)." | tee -a "$TIMING_FILE"
 echo "Use the per_generation_avg lines above (per prefix, since models differ in speed) to estimate" | tee -a "$TIMING_FILE"
 echo "run_full_test.sh's --time -- do NOT just linearly scale the TOTAL_smoke_test line, since it" | tee -a "$TIMING_FILE"

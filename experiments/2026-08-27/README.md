@@ -33,7 +33,7 @@ directory, so they reuse whatever's already been pulled (via
 re-downloading. Set `OVERREFUSAL_SIF` if your container lives somewhere
 other than `$HOME/containers/overrefusal.sif`.
 
-- `run_smoke_test.sh` — 3 prompts x 4 models x 2 prefixes = 24 generations.
+- `run_smoke_test.sh` — 3 prompts x (up to 4) models x 2 prefixes.
   Run this first, and **use its output, not a guess, to size
   `run_full_test.sh`'s `--time`**: it writes a `timing_smoke.txt` alongside
   the results with per-prefix wall-clock time and a per-generation average.
@@ -42,21 +42,43 @@ other than `$HOME/containers/overrefusal.sif`.
   per-generation average instead, and pad for variance across models
   (early testing on this cluster showed `llama3.1:8b` generating at only
   ~4 tokens/sec on the A100, which is slower than expected — get a real
-  number before trusting any estimate).
-- `run_full_test.sh` — the real thing: 800 prompts x 4 models x 2 prefixes
-  = 6400 generations. Has `#SBATCH` directives already filled in for this
-  cluster (`--gres=gpu:a100:1`, `--qos=normal`) — `--time`/`--mem` are
-  still placeholders marked `TODO`, meant to be replaced using the smoke
-  test's numbers before you submit. Also runs fine as plain
+  number before trusting any estimate). **Runs with whichever models are
+  already pulled**, rather than aborting on a missing one — e.g. if
+  Apertus is still downloading, it'll just run the 3 that are ready and
+  print which one it skipped (`timing_smoke.txt` notes this too, so you
+  don't forget to re-check Apertus's speed separately once it's in).
+- `run_full_test.sh` — the real thing: by default, 800 prompts x 4 models
+  x 2 prefixes = 6400 generations. Has `#SBATCH` directives already filled
+  in for this cluster (`--gres=gpu:a100:1`, `--qos=normal`) — `--time`/
+  `--mem` are still placeholders marked `TODO`, meant to be replaced using
+  the smoke test's numbers before you submit. Also runs fine as plain
   `bash run_full_test.sh` inside `tmux` if you'd rather not go through the
   scheduler.
 
+  **To run a smaller slice instead of all 800** (e.g. to get real
+  results faster, or spend less GPU time while still deciding on the full
+  run), override `FULL_CSV_PATH` and `RUN_LABEL` together. A ready-made
+  100-prompt slice already exists —
+  [`data/orbench_violence100_new.csv`](../../data/orbench_violence100_new.csv),
+  prompt_ids `orbench_violence_204`..`_303` — deliberately picked to NOT
+  overlap the 3 prompts (`_201`..`_203`) `run_smoke_test.sh` already used,
+  so nothing gets needlessly regenerated:
+  ```bash
+  FULL_CSV_PATH=data/orbench_violence100_new.csv RUN_LABEL=violence100 \
+    sbatch experiments/2026-08-27/run_full_test.sh
+  ```
+  Output files are named from `RUN_LABEL` (`violence100_answer-armasuisse.csv`
+  etc.), so a 100-prompt run's output never collides with or gets confused
+  for the 800-prompt run's.
+
 Both scripts start their own private Ollama server (own free port, verified
 via `ss -ltnp` that the spawned PID actually owns it — see CLAUDE.md for
-why that check exists), verify the 4 models are already present (fail fast
-with a clear message if not, rather than trying to pull mid-run), run both
-prefixes with `--incremental-output` (crash-safe, flushed per row), and
-finish with a keyword-only `refusal_summary.txt`.
+why that check exists), run both prefixes with `--incremental-output`
+(crash-safe, flushed per row), and finish with a keyword-only
+`refusal_summary.txt`. `run_full_test.sh` still fails fast if NONE of the 4
+models are pulled (rather than trying to pull mid-run) — only
+`run_smoke_test.sh` is lenient about partial model availability, since its
+whole point is a quick check, not a real result.
 
 ## Output layout
 
@@ -65,11 +87,18 @@ results/
 ├── ollama_server[_smoke].log                          private server log
 ├── timing_smoke.txt                                    smoke test only — per-phase
 │                                                        and per-generation timing
-├── orbench_violence800_answer-armasuisse[_smoke].csv          final output
-├── orbench_violence800_answer-armasuisse[_smoke]_incremental.csv
-├── orbench_violence800_answer-analyst[_smoke].csv
-├── orbench_violence800_answer-analyst[_smoke]_incremental.csv
-└── refusal_summary[_smoke].txt
+├── orbench_violence800_answer-armasuisse_smoke.csv     smoke test output (fixed name)
+├── orbench_violence800_answer-armasuisse_smoke_incremental.csv
+├── orbench_violence800_answer-analyst_smoke.csv
+├── orbench_violence800_answer-analyst_smoke_incremental.csv
+├── refusal_summary_smoke.txt
+├── <RUN_LABEL>_answer-armasuisse.csv                   full-test output, e.g.
+│                                                        violence800_... (default) or
+│                                                        violence100_... (100-prompt slice)
+├── <RUN_LABEL>_answer-armasuisse_incremental.csv
+├── <RUN_LABEL>_answer-analyst.csv
+├── <RUN_LABEL>_answer-analyst_incremental.csv
+└── refusal_summary_<RUN_LABEL>.txt
 ```
 
 ## Not yet done / known limitations
