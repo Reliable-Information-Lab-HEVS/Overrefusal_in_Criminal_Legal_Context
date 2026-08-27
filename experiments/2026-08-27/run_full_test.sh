@@ -107,7 +107,13 @@ for i in $(seq 1 30); do
 done
 
 echo "=== 4. Verify OUR process actually owns this port ==="
-OWNER_PID=$(ss -ltnp 2>/dev/null | grep -P ":${PORT}\s" | grep -oP 'pid=\K[0-9]+' | head -1)
+if ! command -v ss >/dev/null 2>&1; then
+  echo "  ABORT: 'ss' not found (needs iproute2 in the container -- rebuild"
+  echo "  overrefusal.sif after pulling the latest cluster/apptainer/overrefusal.def)."
+  kill "$SERVER_PID" 2>/dev/null || true
+  exit 1
+fi
+OWNER_PID=$(ss -ltnp 2>/dev/null | grep -P ":${PORT}\s" | grep -oP 'pid=\K[0-9]+' | head -1) || true
 if [ "$OWNER_PID" != "$SERVER_PID" ]; then
   echo "  ABORT: port $PORT is owned by pid=$OWNER_PID, not our spawned pid=$SERVER_PID."
   echo "  Refusing to proceed against a server we don't control."

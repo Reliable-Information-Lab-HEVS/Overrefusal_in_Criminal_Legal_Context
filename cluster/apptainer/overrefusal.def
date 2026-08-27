@@ -58,8 +58,15 @@ From: ubuntu:24.04
     apt-get install -y --no-install-recommends \
         ca-certificates curl zstd git \
         python3 python3-venv python3-dev \
-        build-essential pkg-config
+        build-essential pkg-config \
+        iproute2
     rm -rf /var/lib/apt/lists/*
+    # iproute2 provides `ss`, used by every Slurm script's "verify our
+    # process actually owns the port it picked" check (see cluster/README.md
+    # / CLAUDE.md for why that check exists). Its absence here caused a
+    # real failure: under `set -e -o pipefail`, `ss` being "command not
+    # found" made that check's command substitution die silently with zero
+    # output, rather than printing any error at all.
 
     echo "=== Ollama (pinned release, checksum-verified) ==="
     OLLAMA_VERSION="v0.33.1"

@@ -24,7 +24,15 @@
 #SBATCH --qos=normal
 
 set -euo pipefail
-cd "$(dirname "$0")/../.."   # repo root
+# SLURM_SUBMIT_DIR (always set by sbatch, to the directory it was invoked
+# from), NOT $0 -- sbatch commonly copies a submitted batch script to a
+# per-job spool file before executing it, so $0 does not reliably point
+# back to this file's real location in the repo under sbatch (confirmed in
+# practice on a sibling script using the same $0-based pattern: it caused
+# a silent "Permission denied" trying to create a directory under the
+# wrong, spool-derived path). Falls back to the current directory for
+# direct `bash script.sh` use -- run it from the repo root in that case.
+cd "${SLURM_SUBMIT_DIR:-$(pwd)}"
 mkdir -p cluster/slurm/logs
 
 SIF="${OVERREFUSAL_SIF:-$HOME/containers/overrefusal.sif}"
@@ -58,7 +66,17 @@ for i in $(seq 1 30); do
 done
 
 echo "=== Verify OUR process owns this port ==="
-OWNER_PID=$(ss -ltnp 2>/dev/null | grep -P ":${PORT}\s" | grep -oP 'pid=\K[0-9]+' | head -1)
+# Runs on the bare host here (this script never re-execs into the
+# container -- only the ollama calls below go through apptainer exec), so
+# a missing `ss` would mean iproute2 isn't on the node itself, not a
+# container packaging gap -- different fix than the container-side check
+# in run_experiments.sh/run_smoke_test.sh/run_full_test.sh.
+if ! command -v ss >/dev/null 2>&1; then
+  echo "ABORT: 'ss' not found on this node (needs iproute2 installed on the host)."
+  kill "$SERVER_PID" 2>/dev/null || true
+  exit 1
+fi
+OWNER_PID=$(ss -ltnp 2>/dev/null | grep -P ":${PORT}\s" | grep -oP 'pid=\K[0-9]+' | head -1) || true
 if [ "$OWNER_PID" != "$SERVER_PID" ]; then
   echo "ABORT: port $PORT owned by pid=$OWNER_PID, not our pid=$SERVER_PID."
   kill "$SERVER_PID" 2>/dev/null || true
