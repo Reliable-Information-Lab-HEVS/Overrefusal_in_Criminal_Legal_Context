@@ -73,18 +73,32 @@ other than `$HOME/containers/overrefusal.sif`.
   etc.), so a 100-prompt run's output never collides with or gets confused
   for the 800-prompt run's.
 
-  **To run with a different set of models** (e.g. if one of the 4 is
-  crashing — Apertus was returning a 500 Internal Server Error on every
-  request as of 2026-08-28, cause not yet found — and you don't want to
-  block the experiment on debugging that), override `FULL_MODELS` as a
-  space-separated list, paired with its own `RUN_LABEL` so the output
-  filenames make clear which models a given run actually covers:
+  **To run with a different set of models and/or prefixes** (e.g. Apertus
+  was returning a 500 Internal Server Error on every request as of
+  2026-08-28 — root cause found, a broken embedded chat template, fix
+  in progress — so excluding it rather than burning GPU time on guaranteed
+  `[ERROR]` rows; or you've already got a clean completed run for one
+  prefix and only want the remaining ones), override `FULL_MODELS` and/or
+  `FULL_PREFIXES` as space-separated lists, paired with their own
+  `RUN_LABEL` so the output filenames make clear what a given run actually
+  covers:
   ```bash
   FULL_MODELS="llama3.1:8b qwen3:8b gemma4:e4b" \
+    FULL_PREFIXES="answer-analyst answer-kindergarten" \
     FULL_CSV_PATH=data/orbench_violence100_new.csv \
     RUN_LABEL=violence100_3models \
     sbatch experiments/2026-08-27/run_full_test.sh
   ```
+  Both overrides are written to a small file under `results/` and read
+  back by path, rather than passed as a raw environment variable — a real
+  bug (root cause not isolated) meant a space-containing env var did not
+  reliably survive the `sbatch` -> self-re-exec -> `apptainer exec` chain,
+  even when passed explicitly via `--env`. A file path has no spaces for
+  any link in that chain to mis-parse. The very first lines of every run's
+  log print exactly what it resolved (`resolved MODELS (N): ...` /
+  `resolved PREFIXES (N): ...`), so a propagation issue is visible
+  immediately instead of only inferable from which models/prefixes show
+  up in the generation loop.
 
 Both scripts start their own private Ollama server (own free port, verified
 via `ss -ltnp` that the spawned PID actually owns it — see CLAUDE.md for

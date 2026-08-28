@@ -25,16 +25,25 @@
 # Output filenames use RUN_LABEL, so a 100-prompt run and an 800-prompt run
 # never collide or get confused with each other.
 #
-# To run with a DIFFERENT SET OF MODELS (e.g. Apertus is returning 500s on
-# every single request as of 2026-08-28 -- a real crash, not a fluke --
-# exclude it rather than let a quarter of the run come back as pure
-# [ERROR] rows while that's being root-caused), override FULL_MODELS as a
-# space-separated list, and give it its own RUN_LABEL so the file names
-# make it obvious this run doesn't cover all 4 models:
+# To run with a DIFFERENT SET OF MODELS and/or PREFIXES (e.g. Apertus is
+# returning 500s on every single request as of 2026-08-28 -- a real crash,
+# not a fluke, still being root-caused -- exclude it rather than let a
+# quarter of the run come back as pure [ERROR] rows; or you've already got
+# clean results for one prefix and only want the remaining ones), override
+# FULL_MODELS and/or FULL_PREFIXES as space-separated lists, and give it
+# its own RUN_LABEL so the file names make it obvious what a given run
+# actually covers:
 #   FULL_MODELS="llama3.1:8b qwen3:8b gemma4:e4b" \
+#     FULL_PREFIXES="answer-analyst answer-kindergarten" \
 #     FULL_CSV_PATH=data/orbench_violence100_new.csv \
 #     RUN_LABEL=violence100_3models \
 #     sbatch experiments/2026-08-27/run_full_test.sh
+# (Both overrides are written to a small file under results/ and read back
+# by path rather than passed as a raw multi-word env var -- a real bug,
+# root cause not isolated, meant a space-containing env var did not
+# reliably survive the sbatch -> self-re-exec -> apptainer exec chain even
+# when passed explicitly via --env. A file path has no spaces for any of
+# that chain to mis-parse.)
 #
 #SBATCH --job-name=orbench_violence800_answer
 #SBATCH --output=experiments/2026-08-27/results/slurm_%j.out
@@ -81,8 +90,51 @@ MODELS_DIR="${FULL_OLLAMA_MODELS_DIR:-$HOME/.ollama/models}"
 LOG="$OUT_DIR/ollama_server.log"
 SIF="${OVERREFUSAL_SIF:-$HOME/containers/overrefusal.sif}"
 
-if [ -n "${FULL_MODELS:-}" ]; then
-  read -ra MODELS <<< "$FULL_MODELS"
+mkdir -p "$OUT_DIR" "$MODELS_DIR"
+
+if [ -z "${INSIDE_APPTAINER_OVERREFUSAL:-}" ]; then
+  # FULL_MODELS/FULL_PREFIXES overrides are passed via a FILE, not
+  # directly as a multi-word environment variable. Confirmed on a real
+  # run: a space-containing env var value did NOT reliably survive the
+  # sbatch -> self-re-exec -> apptainer exec chain, even when forwarded
+  # explicitly via --env, while space-free values (FULL_CSV_PATH,
+  # RUN_LABEL) did -- exact root cause in that chain not isolated. A file
+  # path has no spaces or shell-metacharacters for anything in that chain
+  # to mis-parse, so this sidesteps the whole class of problem rather
+  # than guessing again at how to quote it correctly.
+  #
+  # This computation MUST stay inside this pre-re-exec block, guarded by
+  # the same INSIDE_APPTAINER_OVERREFUSAL check as the exec below: on the
+  # second pass (already inside the container), MODELS_OVERRIDE_FILE /
+  # PREFIXES_OVERRIDE_FILE arrive already-resolved via the --env flags
+  # here. Recomputing them from FULL_MODELS/FULL_PREFIXES again on that
+  # second pass would silently reset them to empty if those raw env vars
+  # didn't themselves survive into the container -- exactly the failure
+  # this whole file-based approach exists to avoid. (Caught this by
+  # testing locally before pushing -- it would have reproduced the same
+  # silent bug under a new name.)
+  MODELS_OVERRIDE_FILE=""
+  if [ -n "${FULL_MODELS:-}" ]; then
+    MODELS_OVERRIDE_FILE="$OUT_DIR/.full_models_override"
+    printf '%s\n' "$FULL_MODELS" > "$MODELS_OVERRIDE_FILE"
+  fi
+  PREFIXES_OVERRIDE_FILE=""
+  if [ -n "${FULL_PREFIXES:-}" ]; then
+    PREFIXES_OVERRIDE_FILE="$OUT_DIR/.full_prefixes_override"
+    printf '%s\n' "$FULL_PREFIXES" > "$PREFIXES_OVERRIDE_FILE"
+  fi
+
+  export INSIDE_APPTAINER_OVERREFUSAL=1
+  exec apptainer exec --nv --bind "$HOME:$HOME" --pwd "$REPO_ROOT" \
+    --env "FULL_CSV_PATH=${FULL_CSV_PATH:-}" \
+    --env "RUN_LABEL=${RUN_LABEL:-}" \
+    --env "MODELS_OVERRIDE_FILE=${MODELS_OVERRIDE_FILE}" \
+    --env "PREFIXES_OVERRIDE_FILE=${PREFIXES_OVERRIDE_FILE}" \
+    "$SIF" bash "$SCRIPT_PATH" "$@"
+fi
+
+if [ -n "${MODELS_OVERRIDE_FILE:-}" ] && [ -f "$MODELS_OVERRIDE_FILE" ]; then
+  read -ra MODELS < "$MODELS_OVERRIDE_FILE"
 else
   MODELS=(
     "llama3.1:8b"
@@ -91,31 +143,19 @@ else
     "hf.co/bartowski/swiss-ai_Apertus-8B-Instruct-2509-GGUF:Q4_K_M"
   )
 fi
-PREFIXES=("answer-armasuisse" "answer-analyst" "answer-kindergarten")
-
-mkdir -p "$OUT_DIR" "$MODELS_DIR"
-
-if [ -z "${INSIDE_APPTAINER_OVERREFUSAL:-}" ]; then
-  export INSIDE_APPTAINER_OVERREFUSAL=1
-  # Pass these explicitly via --env rather than relying on ambient
-  # environment inheritance through the sbatch -> apptainer exec chain --
-  # FULL_CSV_PATH/RUN_LABEL were observed to survive that chain but
-  # FULL_MODELS (the one value containing spaces) did not, root cause not
-  # yet confirmed. Being explicit here removes that whole chain as a
-  # possible failure point regardless of what the actual cause turns out
-  # to be.
-  exec apptainer exec --nv --bind "$HOME:$HOME" --pwd "$REPO_ROOT" \
-    --env "FULL_CSV_PATH=${FULL_CSV_PATH:-}" \
-    --env "RUN_LABEL=${RUN_LABEL:-}" \
-    --env "FULL_MODELS=${FULL_MODELS:-}" \
-    "$SIF" bash "$SCRIPT_PATH" "$@"
+if [ -n "${PREFIXES_OVERRIDE_FILE:-}" ] && [ -f "$PREFIXES_OVERRIDE_FILE" ]; then
+  read -ra PREFIXES < "$PREFIXES_OVERRIDE_FILE"
+else
+  PREFIXES=("answer-armasuisse" "answer-analyst" "answer-kindergarten")
 fi
 
-echo "=== 0. Debug: what this run actually resolved (diagnoses env-passthrough issues) ==="
+echo "=== 0. Debug: what this run actually resolved (diagnoses override issues) ==="
 echo "  CSV_PATH=$CSV_PATH"
 echo "  RUN_LABEL=$RUN_LABEL"
-echo "  raw FULL_MODELS env var: '${FULL_MODELS:-<unset>}'"
+echo "  MODELS_OVERRIDE_FILE=${MODELS_OVERRIDE_FILE:-<none>}"
 echo "  resolved MODELS (${#MODELS[@]}): ${MODELS[*]}"
+echo "  PREFIXES_OVERRIDE_FILE=${PREFIXES_OVERRIDE_FILE:-<none>}"
+echo "  resolved PREFIXES (${#PREFIXES[@]}): ${PREFIXES[*]}"
 
 T_START=$(date +%s)
 
