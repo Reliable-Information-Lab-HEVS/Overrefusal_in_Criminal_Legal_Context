@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # orbench_violence800_answer: SMOKE TEST
 #
-# 3 prompts x 4 models x 2 prefixes = 24 generations. Meant to finish in
+# 3 prompts x 4 models x 3 prefixes = 36 generations. Meant to finish in
 # minutes and confirm the environment actually works (Ollama reachable,
 # the 4 models pulled, over_refusal importable, prefixes.py has the
-# answer-armasuisse/answer-analyst entries) AND -- just as importantly --
+# answer-armasuisse/answer-analyst/answer-kindergarten entries) AND --
+# just as importantly --
 # to measure real per-generation timing so run_full_test.sh's #SBATCH
 # --time isn't a guess. See timing_smoke.txt in the output dir after this
 # finishes.
@@ -60,7 +61,7 @@ MODELS=(
   "gemma4:e4b"
   "hf.co/bartowski/swiss-ai_Apertus-8B-Instruct-2509-GGUF:Q4_K_M"
 )
-PREFIXES=("answer-armasuisse" "answer-analyst")
+PREFIXES=("answer-armasuisse" "answer-analyst" "answer-kindergarten")
 
 mkdir -p "$OUT_DIR" "$MODELS_DIR"
 
@@ -154,9 +155,11 @@ for prefix in "${PREFIXES[@]}"; do
 done
 
 echo "=== 7. Keyword refusal summary ==="
-python3 helpers/refusal_summary.py \
-  "$OUT_DIR/orbench_violence800_answer-armasuisse_smoke.csv" \
-  "$OUT_DIR/orbench_violence800_answer-analyst_smoke.csv" \
+SUMMARY_FILES=()
+for prefix in "${PREFIXES[@]}"; do
+  SUMMARY_FILES+=("$OUT_DIR/orbench_violence800_${prefix}_smoke.csv")
+done
+python3 helpers/refusal_summary.py "${SUMMARY_FILES[@]}" \
   --output "$OUT_DIR/refusal_summary_smoke.txt"
 
 echo "=== 8. Stop the private Ollama server ==="

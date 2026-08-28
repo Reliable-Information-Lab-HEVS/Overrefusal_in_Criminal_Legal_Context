@@ -2,7 +2,9 @@
 #
 # orbench_violence800_answer: FULL TEST
 #
-# Default: 800 prompts x 4 models x 2 prefixes = 6400 generations.
+# Default: 800 prompts x 4 models x 3 prefixes = 9600 generations
+# (armasuisse / analyst / kindergarten -- the full matched-affiliation
+# triple, added 2026-08-28).
 # Long-running -- run run_smoke_test.sh FIRST and use its timing_smoke.txt
 # output to set --time below realistically before submitting this.
 #
@@ -41,11 +43,11 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32G
 #SBATCH --time=24:00:00        # TODO: set this from run_smoke_test.sh's
-                                # timing_smoke.txt (per_generation_avg x 6400,
+                                # timing_smoke.txt (per_generation_avg x 9600,
                                 # padded), not left at this placeholder --
                                 # observed early throughput on this A100 was
                                 # ~4 tokens/sec for llama3.1:8b, which would
-                                # make 6400 generations take far longer than
+                                # make 9600 generations take far longer than
                                 # 24h if that holds across all 4 models.
 #SBATCH --qos=normal            # TODO: confirm this QOS allows a job this
                                 # long on your account.
@@ -89,7 +91,7 @@ else
     "hf.co/bartowski/swiss-ai_Apertus-8B-Instruct-2509-GGUF:Q4_K_M"
   )
 fi
-PREFIXES=("answer-armasuisse" "answer-analyst")
+PREFIXES=("answer-armasuisse" "answer-analyst" "answer-kindergarten")
 
 mkdir -p "$OUT_DIR" "$MODELS_DIR"
 
@@ -172,9 +174,11 @@ for prefix in "${PREFIXES[@]}"; do
 done
 
 echo "=== 8. Keyword-only refusal summary ==="
-python3 helpers/refusal_summary.py \
-  "$OUT_DIR/${RUN_LABEL}_answer-armasuisse.csv" \
-  "$OUT_DIR/${RUN_LABEL}_answer-analyst.csv" \
+SUMMARY_FILES=()
+for prefix in "${PREFIXES[@]}"; do
+  SUMMARY_FILES+=("$OUT_DIR/${RUN_LABEL}_${prefix}.csv")
+done
+python3 helpers/refusal_summary.py "${SUMMARY_FILES[@]}" \
   --output "$OUT_DIR/refusal_summary_${RUN_LABEL}.txt"
 
 echo "=== 9. Stop the private Ollama server ==="
