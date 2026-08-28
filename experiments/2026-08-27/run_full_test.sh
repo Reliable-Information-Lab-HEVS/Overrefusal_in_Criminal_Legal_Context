@@ -97,9 +97,25 @@ mkdir -p "$OUT_DIR" "$MODELS_DIR"
 
 if [ -z "${INSIDE_APPTAINER_OVERREFUSAL:-}" ]; then
   export INSIDE_APPTAINER_OVERREFUSAL=1
+  # Pass these explicitly via --env rather than relying on ambient
+  # environment inheritance through the sbatch -> apptainer exec chain --
+  # FULL_CSV_PATH/RUN_LABEL were observed to survive that chain but
+  # FULL_MODELS (the one value containing spaces) did not, root cause not
+  # yet confirmed. Being explicit here removes that whole chain as a
+  # possible failure point regardless of what the actual cause turns out
+  # to be.
   exec apptainer exec --nv --bind "$HOME:$HOME" --pwd "$REPO_ROOT" \
+    --env "FULL_CSV_PATH=${FULL_CSV_PATH:-}" \
+    --env "RUN_LABEL=${RUN_LABEL:-}" \
+    --env "FULL_MODELS=${FULL_MODELS:-}" \
     "$SIF" bash "$SCRIPT_PATH" "$@"
 fi
+
+echo "=== 0. Debug: what this run actually resolved (diagnoses env-passthrough issues) ==="
+echo "  CSV_PATH=$CSV_PATH"
+echo "  RUN_LABEL=$RUN_LABEL"
+echo "  raw FULL_MODELS env var: '${FULL_MODELS:-<unset>}'"
+echo "  resolved MODELS (${#MODELS[@]}): ${MODELS[*]}"
 
 T_START=$(date +%s)
 
