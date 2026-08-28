@@ -23,6 +23,17 @@
 # Output filenames use RUN_LABEL, so a 100-prompt run and an 800-prompt run
 # never collide or get confused with each other.
 #
+# To run with a DIFFERENT SET OF MODELS (e.g. Apertus is returning 500s on
+# every single request as of 2026-08-28 -- a real crash, not a fluke --
+# exclude it rather than let a quarter of the run come back as pure
+# [ERROR] rows while that's being root-caused), override FULL_MODELS as a
+# space-separated list, and give it its own RUN_LABEL so the file names
+# make it obvious this run doesn't cover all 4 models:
+#   FULL_MODELS="llama3.1:8b qwen3:8b gemma4:e4b" \
+#     FULL_CSV_PATH=data/orbench_violence100_new.csv \
+#     RUN_LABEL=violence100_3models \
+#     sbatch experiments/2026-08-27/run_full_test.sh
+#
 #SBATCH --job-name=orbench_violence800_answer
 #SBATCH --output=experiments/2026-08-27/results/slurm_%j.out
 #SBATCH --error=experiments/2026-08-27/results/slurm_%j.err
@@ -68,12 +79,16 @@ MODELS_DIR="${FULL_OLLAMA_MODELS_DIR:-$HOME/.ollama/models}"
 LOG="$OUT_DIR/ollama_server.log"
 SIF="${OVERREFUSAL_SIF:-$HOME/containers/overrefusal.sif}"
 
-MODELS=(
-  "llama3.1:8b"
-  "qwen3:8b"
-  "gemma4:e4b"
-  "hf.co/bartowski/swiss-ai_Apertus-8B-Instruct-2509-GGUF:Q4_K_M"
-)
+if [ -n "${FULL_MODELS:-}" ]; then
+  read -ra MODELS <<< "$FULL_MODELS"
+else
+  MODELS=(
+    "llama3.1:8b"
+    "qwen3:8b"
+    "gemma4:e4b"
+    "hf.co/bartowski/swiss-ai_Apertus-8B-Instruct-2509-GGUF:Q4_K_M"
+  )
+fi
 PREFIXES=("answer-armasuisse" "answer-analyst")
 
 mkdir -p "$OUT_DIR" "$MODELS_DIR"
